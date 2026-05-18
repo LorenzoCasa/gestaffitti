@@ -19,10 +19,10 @@ const COLOR_PALETTE = [
 
 const PLATFORMS = ["Airbnb", "Booking", "Subito", "Diretto", "Altro"];
 const COMMISSIONS = { Airbnb: 3, Booking: 15, Subito: 0, Diretto: 0, Altro: 0 };
-const CATEGORIES = ["IMU","TARI","Luce","Gas","Acqua","Internet","Pulizie","Manutenzione","Dotazioni (piatti/bicchieri/ecc)","Abbonamenti piattaforme","Assicurazione","Altro"];
-const FIXED_CATS = ["IMU","TARI","Luce","Gas","Acqua","Internet","Abbonamenti piattaforme","Assicurazione"];
-const MGMT_CATS = ["Pulizie","Manutenzione","Dotazioni (piatti/bicchieri/ecc)","Altro"];
-const RECURRENCES = ["Una tantum","Mensile","Trimestrale","Annuale"];
+const CATEGORIES = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Pulizie","Manutenzione","Dotazioni","Assicurazione","Commissioni piattaforma","Altro"];
+const FIXED_CATS = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Assicurazione","Commissioni piattaforma"];
+const MGMT_CATS = ["Pulizie","Manutenzione","Dotazioni","Altro"];
+const PAYMENT_TYPES = ["Una tantum","Rata IMU (2 rate)","Rata Condominio (5 rate)","Mensile"];
 const MONTHS_LONG = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 
@@ -65,21 +65,10 @@ function getPeriodLabel(tab, month, quarter, year) {
   if (tab === "trimestrale") return `T${quarter + 1} – ${year}`;
   return `${year}`;
 }
-function effectiveExpenseAmount(expense, periodStart, periodEnd) {
-  const rec = expense.ricorrenza || "Una tantum";
-  const amount = Number(expense.amount);
-  const expDate = expense.date;
-  if (!expDate) return 0;
-  if (rec === "Una tantum") return (expDate >= periodStart && expDate <= periodEnd) ? amount : 0;
-  if (expDate > periodEnd) return 0;
-  const effStart = expDate > periodStart ? expDate : periodStart;
-  const [sy, sm] = effStart.split("-").map(Number);
-  const [ey, em] = periodEnd.split("-").map(Number);
-  const months = Math.max(0, (ey - sy) * 12 + (em - sm) + 1);
-  if (rec === "Mensile") return amount * months;
-  if (rec === "Trimestrale") return (amount / 3) * months;
-  if (rec === "Annuale") return (amount / 12) * months;
-  return 0;
+function expInPeriod(expense, periodStart, periodEnd) {
+  const d = expense.date;
+  if (!d) return 0;
+  return (d >= periodStart && d <= periodEnd) ? Number(expense.amount) : 0;
 }
 function fmtEur(n) {
   return Math.round(n).toLocaleString("it-IT");
@@ -291,7 +280,7 @@ const DayPopup=({dayBookings,dateStr,onClose,aptColor,aptLabel})=>(
 // ────────────────────────────────────────────
 //  OWNER VIEW
 // ────────────────────────────────────────────
-function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment}) {
+function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment}) {
   const aptColor=(id)=>apartments.find(a=>a.id===id)?.color||"#c9a96e";
   const aptLabel=(id)=>apartments.find(a=>a.id===id)?.label||id;
   const realApts=apartments.filter(a=>a.id!=="all");
@@ -328,7 +317,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
   }
 
   const emptyBooking={apt:realApts[0]?.id||"apt1",guest:"",email:"",phone:"",checkin:"",checkout:"",price:"",deposit:"",depositPaid:false,platform:"Airbnb",notes:"",cleaning:false,checkinDone:false};
-  const emptyExpense={apt:realApts[0]?.id||"apt1",date:"",category:CATEGORIES[0],description:"",amount:"",ricorrenza:"Una tantum"};
+  const emptyExpense={apt:realApts[0]?.id||"apt1",date:"",category:CATEGORIES[0],notes:"",amount:"",paymentType:"Una tantum",paid:false};
   const [bForm,setBForm]=useState(emptyBooking);
   const [eForm,setEForm]=useState(emptyExpense);
 
@@ -352,15 +341,18 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
   const grossRevenue=periodBookings.reduce((s,b)=>s+Number(b.price),0);
   const totalCommissions=periodBookings.reduce((s,b)=>s+Number(b.price)*(COMMISSIONS[b.platform]||0)/100,0);
   const netRevenue=grossRevenue-totalCommissions;
-  const periodExpenses=filtered(expenses);
+  const periodExpenses=filtered(expenses).filter(e=>e.date>=periodStart&&e.date<=periodEnd);
   const fixedExps=periodExpenses.filter(e=>FIXED_CATS.includes(e.category));
   const mgmtExps=periodExpenses.filter(e=>MGMT_CATS.includes(e.category));
-  const fixedTotal=fixedExps.reduce((s,e)=>s+effectiveExpenseAmount(e,periodStart,periodEnd),0);
-  const mgmtTotal=mgmtExps.reduce((s,e)=>s+effectiveExpenseAmount(e,periodStart,periodEnd),0);
+  const fixedTotal=fixedExps.reduce((s,e)=>s+Number(e.amount),0);
+  const mgmtTotal=mgmtExps.reduce((s,e)=>s+Number(e.amount),0);
   const totalPeriodExp=fixedTotal+mgmtTotal;
-  const nettoFinale=netRevenue-totalPeriodExp;
-  const fixedByCategory=FIXED_CATS.map(cat=>({cat,amt:fixedExps.filter(e=>e.category===cat).reduce((s,e)=>s+effectiveExpenseAmount(e,periodStart,periodEnd),0)})).filter(x=>x.amt>0);
-  const mgmtByCategory=MGMT_CATS.map(cat=>({cat,amt:mgmtExps.filter(e=>e.category===cat).reduce((s,e)=>s+effectiveExpenseAmount(e,periodStart,periodEnd),0)})).filter(x=>x.amt>0);
+  const paidPeriodExp=periodExpenses.filter(e=>e.paid).reduce((s,e)=>s+Number(e.amount),0);
+  const unpaidPeriodExp=periodExpenses.filter(e=>!e.paid).reduce((s,e)=>s+Number(e.amount),0);
+  const nettoReale=netRevenue-paidPeriodExp;
+  const nettoPrevisto=netRevenue-totalPeriodExp;
+  const fixedByCategory=FIXED_CATS.map(cat=>({cat,amt:fixedExps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0)})).filter(x=>x.amt>0);
+  const mgmtByCategory=MGMT_CATS.map(cat=>({cat,amt:mgmtExps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0)})).filter(x=>x.amt>0);
 
   // Commission info for booking form
   const commPct=COMMISSIONS[bForm.platform]||0;
@@ -378,13 +370,12 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
     console.log("[saveExpense] eForm:", eForm);
     if(!eForm.date){alert("Inserisci la data");return;}
     if(!eForm.amount||Number(eForm.amount)<=0){alert("Inserisci un importo valido");return;}
-    if(!eForm.description){alert("Inserisci una descrizione");return;}
     if(editItem) await onUpdateExpense(editItem,eForm);
     else await onAddExpense(eForm);
     setModal(null);setEditItem(null);setEForm(emptyExpense);
   }
   const openEditB=(b)=>{setBForm({...b});setEditItem(b.id);setModal("booking");};
-  const openEditE=(e)=>{setEForm({...e,ricorrenza:e.ricorrenza||"Una tantum"});setEditItem(e.id);setModal("expense");};
+  const openEditE=(e)=>{setEForm({...e,paymentType:"Una tantum",notes:e.notes||""});setEditItem(e.id);setModal("expense");};
 
   function openAddApt(){setAptForm({id:`apt_${Date.now()}`,label:"",color:COLOR_PALETTE[0]});setAptModal("add");}
   function openEditApt(apt){setAptForm({...apt});setAptModal("edit");}
@@ -717,16 +708,36 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
               </div>
             </div>
 
-            {/* NETTO FINALE */}
-            <div style={{background: nettoFinale>=0?"rgba(110,201,154,0.08)":"rgba(201,110,110,0.08)",border:`1px solid ${nettoFinale>=0?"#6ec99a44":"#c96e6e44"}`,borderRadius:"14px",padding:"1.1rem",marginBottom:"1.1rem",textAlign:"center"}}>
-              <div style={{fontSize:"0.65rem",color:nettoFinale>=0?"#6ec99a":"#c96e6e",letterSpacing:"0.15em",textTransform:"uppercase",fontFamily:"'Playfair Display',serif",marginBottom:"0.3rem"}}>Netto Finale</div>
-              <div style={{fontSize:"2rem",fontWeight:"700",color:nettoFinale>=0?"#6ec99a":"#c96e6e",fontFamily:"'Playfair Display',serif",letterSpacing:"-0.01em"}}>
-                {nettoFinale>=0?"":"−"}€{fmtEur(Math.abs(nettoFinale))}
+            {/* NETTO REALE / PREVISTO */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginBottom:"0.6rem"}}>
+              <div style={{background:nettoReale>=0?"rgba(110,201,154,0.06)":"rgba(201,110,110,0.06)",border:`1px solid ${nettoReale>=0?"#6ec99a33":"#c96e6e33"}`,borderRadius:"12px",padding:"0.85rem",textAlign:"center"}}>
+                <div style={{fontSize:"0.6rem",color:"#6a5a40",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:"0.25rem"}}>Netto Reale</div>
+                <div style={{fontSize:"1.3rem",fontWeight:"700",color:nettoReale>=0?"#6ec99a":"#c96e6e",fontFamily:"'Playfair Display',serif"}}>
+                  {nettoReale>=0?"":"−"}€{fmtEur(Math.abs(nettoReale))}
+                </div>
+                <div style={{fontSize:"0.58rem",color:"#4a3a20",marginTop:"0.15rem"}}>solo spese pagate</div>
               </div>
-              <div style={{fontSize:"0.65rem",color:"#4a3a20",marginTop:"0.2rem"}}>
-                {nettoFinale>=0?"Periodo in utile":"Periodo in perdita"}
+              <div style={{background:nettoPrevisto>=0?"rgba(110,201,154,0.04)":"rgba(201,110,110,0.04)",border:`1px solid ${nettoPrevisto>=0?"#6ec99a22":"#c96e6e22"}`,borderRadius:"12px",padding:"0.85rem",textAlign:"center"}}>
+                <div style={{fontSize:"0.6rem",color:"#6a5a40",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:"0.25rem"}}>Netto Previsto</div>
+                <div style={{fontSize:"1.3rem",fontWeight:"700",color:nettoPrevisto>=0?"#6ec99a":"#c96e6e",fontFamily:"'Playfair Display',serif"}}>
+                  {nettoPrevisto>=0?"":"−"}€{fmtEur(Math.abs(nettoPrevisto))}
+                </div>
+                <div style={{fontSize:"0.58rem",color:"#4a3a20",marginTop:"0.15rem"}}>tutte le spese</div>
               </div>
             </div>
+            {(paidPeriodExp>0||unpaidPeriodExp>0)&&(
+              <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"10px",padding:"0.65rem 0.85rem",marginBottom:"0.9rem",display:"flex",gap:"1.2rem",justifyContent:"center"}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:"0.6rem",color:"#6a5a40",marginBottom:"0.1rem"}}>Pagate</div>
+                  <div style={{fontSize:"0.88rem",color:"#6ec99a",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(paidPeriodExp)}</div>
+                </div>
+                <div style={{width:"1px",background:"#2a2010"}}/>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:"0.6rem",color:"#6a5a40",marginBottom:"0.1rem"}}>Da pagare</div>
+                  <div style={{fontSize:"0.88rem",color:"#c9a96e",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(unpaidPeriodExp)}</div>
+                </div>
+              </div>
+            )}
 
             {/* Registro Spese */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem"}}>
@@ -736,11 +747,17 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
             <div style={{display:"flex",flexDirection:"column",gap:"0.45rem"}}>
               {filteredExpenses.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem"}}>Nessuna spesa.</p>}
               {filteredExpenses.map(e=>(
-                <div key={e.id} style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"10px",padding:"0.75rem 0.85rem",display:"flex",alignItems:"center",gap:"0.7rem"}}>
+                <div key={e.id} style={{background:"#120f0a",border:`1px solid ${e.paid?"#2a3a20":"#2a2010"}`,borderRadius:"10px",padding:"0.75rem 0.85rem",display:"flex",alignItems:"center",gap:"0.7rem"}}>
                   <div style={{width:"6px",height:"6px",borderRadius:"50%",background:aptColor(e.apt),flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#e8d5b0",fontSize:"0.82rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.description}</div>
-                    <div style={{color:"#6a5a40",fontSize:"0.67rem"}}>{e.category} · {aptLabel(e.apt)} · {formatDate(e.date)}{e.ricorrenza&&e.ricorrenza!=="Una tantum"?` · 🔄 ${e.ricorrenza}`:""}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:"0.4rem",flexWrap:"wrap"}}>
+                      <span style={{color:"#e8d5b0",fontSize:"0.82rem",fontWeight:"500"}}>{e.category}</span>
+                      {e.rate_group&&<span style={{fontSize:"0.6rem",color:"#6a5a40",background:"#1a1510",padding:"0.1rem 0.3rem",borderRadius:"3px",border:"1px solid #2a2010"}}>rata</span>}
+                      <span onClick={()=>onToggleExpensePaid(e.id)} style={{fontSize:"0.62rem",padding:"0.1rem 0.4rem",borderRadius:"4px",border:`1px solid ${e.paid?"#6ec99a44":"#c9a96e44"}`,background:e.paid?"#1a2a1a":"#2a1a0a",color:e.paid?"#6ec99a":"#c9a96e",cursor:"pointer",marginLeft:"auto",userSelect:"none",flexShrink:0}}>
+                        {e.paid?"✓ Pagata":"⏳ Da pagare"}
+                      </span>
+                    </div>
+                    <div style={{color:"#6a5a40",fontSize:"0.67rem",marginTop:"0.1rem"}}>{aptLabel(e.apt)} · {formatDate(e.date)}{e.notes?` · ${e.notes}`:""}</div>
                   </div>
                   <div style={{color:"#c96e6e",fontFamily:"'Playfair Display',serif",fontSize:"0.95rem",fontWeight:"700",flexShrink:0}}>−€{e.amount}</div>
                   <div style={{display:"flex",gap:"0.28rem",flexShrink:0}}>
@@ -884,17 +901,30 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
         <Modal title={editItem?"Modifica Spesa":"Nuova Spesa"} onClose={()=>{setModal(null);setEditItem(null);}}>
           <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
-            <Field label="Data"><input type="date" value={eForm.date} onChange={e=>setEForm({...eForm,date:e.target.value})} style={iS}/></Field>
             <Field label="Categoria"><select value={eForm.category} onChange={e=>setEForm({...eForm,category:e.target.value})} style={iS}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></Field>
+            <Field label="Data riferimento"><input type="date" value={eForm.date} onChange={e=>setEForm({...eForm,date:e.target.value})} style={iS}/></Field>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
-            <Field label="Importo €"><input type="number" value={eForm.amount} onChange={e=>setEForm({...eForm,amount:e.target.value})} style={iS} placeholder="0"/></Field>
-            <Field label="Ricorrenza"><select value={eForm.ricorrenza} onChange={e=>setEForm({...eForm,ricorrenza:e.target.value})} style={iS}>{RECURRENCES.map(r=><option key={r}>{r}</option>)}</select></Field>
+            <Field label={eForm.paymentType==="Una tantum"?"Importo €":"Importo totale €"}><input type="number" value={eForm.amount} onChange={e=>setEForm({...eForm,amount:e.target.value})} style={iS} placeholder="0"/></Field>
+            <Field label="Tipo pagamento"><select value={eForm.paymentType} onChange={e=>setEForm({...eForm,paymentType:e.target.value})} style={iS}>{PAYMENT_TYPES.map(r=><option key={r}>{r}</option>)}</select></Field>
           </div>
-          <Field label="Descrizione"><input value={eForm.description} onChange={e=>setEForm({...eForm,description:e.target.value})} style={iS} placeholder="Descrizione spesa..."/></Field>
+          {eForm.paymentType!=="Una tantum"&&Number(eForm.amount)>0&&(
+            <div style={{padding:"0.45rem 0.7rem",background:"#0d0a07",borderRadius:"7px",border:"1px solid #2a2010",marginBottom:"0.5rem",fontSize:"0.72rem",color:"#8a7a60"}}>
+              {eForm.paymentType==="Rata IMU (2 rate)"&&<>Crea 2 rate da <span style={{color:"#c9a96e"}}>€{Math.round(Number(eForm.amount)/2*100)/100}</span> · Scadenze: 16 Giu e 30 Nov</>}
+              {eForm.paymentType==="Rata Condominio (5 rate)"&&<>Crea 5 rate da <span style={{color:"#c9a96e"}}>€{Math.round(Number(eForm.amount)/5*100)/100}</span> · Feb, Apr, Giu, Set, Nov</>}
+              {eForm.paymentType==="Mensile"&&<>Crea 12 pagamenti da <span style={{color:"#c9a96e"}}>€{Number(eForm.amount)}</span> · Uno per ogni mese dell'anno</>}
+            </div>
+          )}
+          <Field label="Note (opzionale)"><input value={eForm.notes} onChange={e=>setEForm({...eForm,notes:e.target.value})} style={iS} placeholder="Note aggiuntive..."/></Field>
+          {editItem&&(
+            <div style={{display:"flex",alignItems:"center",gap:"0.65rem",marginBottom:"0.9rem",padding:"0.55rem 0.8rem",background:"#0d0a07",borderRadius:"8px",border:"1px solid #2a2010",cursor:"pointer"}} onClick={()=>setEForm({...eForm,paid:!eForm.paid})}>
+              <span style={{fontSize:"1rem"}}>{eForm.paid?"✅":"⬜"}</span>
+              <span style={{color:"#8a7a60",fontSize:"0.8rem",fontFamily:"'Playfair Display',serif"}}>Spesa già pagata</span>
+            </div>
+          )}
           <div style={{display:"flex",gap:"0.65rem",marginTop:"0.2rem"}}>
             <button onClick={()=>{setModal(null);setEditItem(null);}} style={{...btnP,flex:1,background:"#2a2010",color:"#8a7a60"}}>Annulla</button>
-            <button onClick={saveExpense} style={{...btnP,flex:1}}>Salva</button>
+            <button onClick={saveExpense} style={{...btnP,flex:1}}>Salva{eForm.paymentType!=="Una tantum"&&!editItem?" (crea rate)":""}</button>
           </div>
         </Modal>
       )}
@@ -934,13 +964,7 @@ export default function App() {
     try{const s=localStorage.getItem("gestaffitti_apartments");return s?JSON.parse(s):DEFAULT_APARTMENTS;}
     catch{return DEFAULT_APARTMENTS;}
   });
-  const [expMeta,setExpMeta]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem("gestaffitti_exp_meta")||"{}");}
-    catch{return {};}
-  });
-
   useEffect(()=>{localStorage.setItem("gestaffitti_apartments",JSON.stringify(apartments));},[apartments]);
-  useEffect(()=>{localStorage.setItem("gestaffitti_exp_meta",JSON.stringify(expMeta));},[expMeta]);
 
   useEffect(()=>{
     async function fetchData(){
@@ -955,7 +979,7 @@ export default function App() {
     fetchData();
   },[]);
 
-  const expensesWithMeta=expenses.map(e=>({...e,ricorrenza:expMeta[e.id]?.ricorrenza||"Una tantum"}));
+  const expensesWithMeta=expenses.map(e=>({...e,paid:e.paid||false,notes:e.notes||"",rate_group:e.rate_group||null}));
 
   const addApartment=(apt)=>setApartments(prev=>[...prev,apt]);
   const updateApartment=(apt)=>setApartments(prev=>prev.map(a=>a.id===apt.id?apt:a));
@@ -990,37 +1014,53 @@ export default function App() {
     setBookings(bs=>bs.map(x=>x.id===id?{...x,depositPaid:newVal}:x));
     await supabase.from("bookings").update({deposit_paid:newVal}).eq("id",id);
   };
+  const buildExpRow=(apt,date,category,notes,amount,rateGroup=null)=>({
+    apt,date,category,description:category,notes:notes||"",amount:Number(amount),paid:false,
+    ...(rateGroup?{rate_group:rateGroup}:{}),
+  });
   const addExpense=async(formData)=>{
-    const{ricorrenza,id:_id,...rest}=formData;
-    const row={apt:rest.apt,date:rest.date,category:rest.category,description:rest.description,amount:Number(rest.amount)};
-    console.log("[addExpense] row da inviare:", row);
-    const{data,error}=await supabase.from("expenses").insert(row).select().single();
-    if(error){
-      console.error("[addExpense] Errore Supabase:", error);
-      alert("Errore salvataggio spesa: "+error.message);
-      return;
+    const{paymentType,id:_id,...rest}=formData;
+    const year=rest.date?rest.date.split("-")[0]:String(new Date().getFullYear());
+    let rows=[];
+    if(paymentType==="Rata IMU (2 rate)"){
+      const rg=`imu_${Date.now()}`;const half=Math.round(Number(rest.amount)/2*100)/100;
+      rows=[buildExpRow(rest.apt,`${year}-06-16`,rest.category,rest.notes,half,rg),
+            buildExpRow(rest.apt,`${year}-11-30`,rest.category,rest.notes,half,rg)];
+    }else if(paymentType==="Rata Condominio (5 rate)"){
+      const rg=`cond_${Date.now()}`;const fifth=Math.round(Number(rest.amount)/5*100)/100;
+      ["02","04","06","09","11"].forEach(m=>rows.push(buildExpRow(rest.apt,`${year}-${m}-15`,rest.category,rest.notes,fifth,rg)));
+    }else if(paymentType==="Mensile"){
+      const rg=`mens_${Date.now()}`;
+      Array.from({length:12},(_,i)=>rows.push(buildExpRow(rest.apt,`${year}-${String(i+1).padStart(2,"0")}-01`,rest.category,rest.notes,rest.amount,rg)));
+    }else{
+      rows=[buildExpRow(rest.apt,rest.date,rest.category,rest.notes,rest.amount)];
     }
-    console.log("[addExpense] Salvato:", data);
-    setExpenses(es=>[...es,data]);
-    setExpMeta(m=>({...m,[data.id]:{ricorrenza:ricorrenza||"Una tantum"}}));
+    console.log("[addExpense] rows:", rows);
+    const newExp=[];
+    for(const row of rows){
+      const{data,error}=await supabase.from("expenses").insert(row).select().single();
+      if(error){console.error("[addExpense] Errore:",error);alert("Errore: "+error.message);return;}
+      if(data) newExp.push(data);
+    }
+    setExpenses(es=>[...es,...newExp]);
   };
   const updateExpense=async(id,formData)=>{
-    const{ricorrenza,id:_id,...rest}=formData;
-    const row={apt:rest.apt,date:rest.date,category:rest.category,description:rest.description,amount:Number(rest.amount)};
-    console.log("[updateExpense] id:", id, "row:", row);
+    const{paymentType,id:_id,...rest}=formData;
+    const row={apt:rest.apt,date:rest.date,category:rest.category,description:rest.category,notes:rest.notes||"",amount:Number(rest.amount),paid:rest.paid||false};
+    console.log("[updateExpense] id:",id,"row:",row);
     const{error}=await supabase.from("expenses").update(row).eq("id",id);
-    if(error){
-      console.error("[updateExpense] Errore Supabase:", error);
-      alert("Errore aggiornamento spesa: "+error.message);
-      return;
-    }
+    if(error){console.error("[updateExpense] Errore:",error);alert("Errore: "+error.message);return;}
     setExpenses(es=>es.map(e=>e.id===id?{...row,id}:e));
-    setExpMeta(m=>({...m,[id]:{ricorrenza:ricorrenza||"Una tantum"}}));
+  };
+  const toggleExpensePaid=async(id)=>{
+    const e=expenses.find(x=>x.id===id);if(!e)return;
+    const newVal=!(e.paid||false);
+    setExpenses(es=>es.map(x=>x.id===id?{...x,paid:newVal}:x));
+    await supabase.from("expenses").update({paid:newVal}).eq("id",id);
   };
   const deleteExpense=async(id)=>{
     await supabase.from("expenses").delete().eq("id",id);
     setExpenses(es=>es.filter(e=>e.id!==id));
-    setExpMeta(m=>{const n={...m};delete n[id];return n;});
   };
 
   if(loading) return <LoadingScreen/>;
@@ -1032,7 +1072,7 @@ export default function App() {
       user={user} bookings={bookings} expenses={expensesWithMeta}
       onAddBooking={addBooking} onUpdateBooking={updateBooking} onDeleteBooking={deleteBooking}
       onToggleCleaning={toggleCleaning} onToggleCheckin={toggleCheckin} onToggleDeposit={toggleDeposit}
-      onAddExpense={addExpense} onUpdateExpense={updateExpense} onDeleteExpense={deleteExpense}
+      onAddExpense={addExpense} onUpdateExpense={updateExpense} onDeleteExpense={deleteExpense} onToggleExpensePaid={toggleExpensePaid}
       onLogout={()=>setUser(null)}
       apartments={apartments} onAddApartment={addApartment} onUpdateApartment={updateApartment} onDeleteApartment={deleteApartment}
     />
