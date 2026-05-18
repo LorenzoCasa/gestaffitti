@@ -18,7 +18,7 @@ const COLOR_PALETTE = [
 ];
 
 const PLATFORMS = ["Airbnb", "Booking", "Subito", "Diretto", "Altro"];
-const COMMISSIONS = { Airbnb: 3, Booking: 15, Subito: 5, Diretto: 0, Altro: 0 };
+const COMMISSIONS = { Airbnb: 3, Booking: 15, Subito: 0, Diretto: 0, Altro: 0 };
 const CATEGORIES = ["IMU","TARI","Luce","Gas","Acqua","Internet","Pulizie","Manutenzione","Dotazioni (piatti/bicchieri/ecc)","Abbonamenti piattaforme","Assicurazione","Altro"];
 const FIXED_CATS = ["IMU","TARI","Luce","Gas","Acqua","Internet","Abbonamenti piattaforme","Assicurazione"];
 const MGMT_CATS = ["Pulizie","Manutenzione","Dotazioni (piatti/bicchieri/ecc)","Altro"];
@@ -375,7 +375,10 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
     setModal(null);setEditItem(null);setBForm(emptyBooking);
   }
   async function saveExpense(){
-    if(!eForm.description||!eForm.date||!eForm.amount) return;
+    console.log("[saveExpense] eForm:", eForm);
+    if(!eForm.date){alert("Inserisci la data");return;}
+    if(!eForm.amount||Number(eForm.amount)<=0){alert("Inserisci un importo valido");return;}
+    if(!eForm.description){alert("Inserisci una descrizione");return;}
     if(editItem) await onUpdateExpense(editItem,eForm);
     else await onAddExpense(eForm);
     setModal(null);setEditItem(null);setEForm(emptyExpense);
@@ -988,22 +991,31 @@ export default function App() {
     await supabase.from("bookings").update({deposit_paid:newVal}).eq("id",id);
   };
   const addExpense=async(formData)=>{
-    const{ricorrenza,...rest}=formData;
-    const row={...rest,amount:Number(rest.amount)};
+    const{ricorrenza,id:_id,...rest}=formData;
+    const row={apt:rest.apt,date:rest.date,category:rest.category,description:rest.description,amount:Number(rest.amount)};
+    console.log("[addExpense] row da inviare:", row);
     const{data,error}=await supabase.from("expenses").insert(row).select().single();
-    if(!error&&data){
-      setExpenses(es=>[...es,data]);
-      setExpMeta(m=>({...m,[data.id]:{ricorrenza:ricorrenza||"Una tantum"}}));
+    if(error){
+      console.error("[addExpense] Errore Supabase:", error);
+      alert("Errore salvataggio spesa: "+error.message);
+      return;
     }
+    console.log("[addExpense] Salvato:", data);
+    setExpenses(es=>[...es,data]);
+    setExpMeta(m=>({...m,[data.id]:{ricorrenza:ricorrenza||"Una tantum"}}));
   };
   const updateExpense=async(id,formData)=>{
-    const{ricorrenza,...rest}=formData;
-    const row={...rest,amount:Number(rest.amount)};
+    const{ricorrenza,id:_id,...rest}=formData;
+    const row={apt:rest.apt,date:rest.date,category:rest.category,description:rest.description,amount:Number(rest.amount)};
+    console.log("[updateExpense] id:", id, "row:", row);
     const{error}=await supabase.from("expenses").update(row).eq("id",id);
-    if(!error){
-      setExpenses(es=>es.map(e=>e.id===id?{...row,id}:e));
-      setExpMeta(m=>({...m,[id]:{ricorrenza:ricorrenza||"Una tantum"}}));
+    if(error){
+      console.error("[updateExpense] Errore Supabase:", error);
+      alert("Errore aggiornamento spesa: "+error.message);
+      return;
     }
+    setExpenses(es=>es.map(e=>e.id===id?{...row,id}:e));
+    setExpMeta(m=>({...m,[id]:{ricorrenza:ricorrenza||"Una tantum"}}));
   };
   const deleteExpense=async(id)=>{
     await supabase.from("expenses").delete().eq("id",id);
