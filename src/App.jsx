@@ -6,10 +6,15 @@ const USERS = [
   { username: "pulizie", password: "pulisco123", role: "cleaner", label: "Addetta Pulizie" },
 ];
 
-const APARTMENTS = [
+const DEFAULT_APARTMENTS = [
   { id: "all", label: "Tutti", color: "#c9a96e" },
   { id: "apt1", label: "🌊 App. Mare", color: "#6e9ec9" },
   { id: "apt2", label: "⛰️ App. Monte", color: "#c96e9e" },
+];
+
+const COLOR_PALETTE = [
+  "#6e9ec9","#c96e9e","#9ec96e","#c9a96e","#6ec9a9",
+  "#c96e6e","#9e6ec9","#c9c96e","#6ec9c9","#c9906e",
 ];
 
 const PLATFORMS = ["Airbnb", "Booking", "Diretto", "Altro"];
@@ -20,25 +25,15 @@ const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov
 function dbToBooking(row) {
   return { ...row, depositPaid: row.deposit_paid, checkinDone: row.checkin_done };
 }
-
 function bookingToDb(b) {
   return {
-    apt: b.apt,
-    guest: b.guest,
-    email: b.email || "",
-    phone: b.phone || "",
-    checkin: b.checkin,
-    checkout: b.checkout,
-    price: Number(b.price) || 0,
-    deposit: Number(b.deposit) || 0,
-    deposit_paid: b.depositPaid || false,
-    platform: b.platform,
-    notes: b.notes || "",
-    cleaning: b.cleaning || false,
+    apt: b.apt, guest: b.guest, email: b.email || "", phone: b.phone || "",
+    checkin: b.checkin, checkout: b.checkout, price: Number(b.price) || 0,
+    deposit: Number(b.deposit) || 0, deposit_paid: b.depositPaid || false,
+    platform: b.platform, notes: b.notes || "", cleaning: b.cleaning || false,
     checkin_done: b.checkinDone || false,
   };
 }
-
 function formatDate(d) {
   if (!d) return "";
   const [y, m, dd] = d.split("-");
@@ -48,8 +43,6 @@ function nightCount(ci, co) {
   if (!ci || !co) return 0;
   return Math.max(0, (new Date(co) - new Date(ci)) / 86400000);
 }
-function aptColor(id) { return APARTMENTS.find(a => a.id === id)?.color || "#c9a96e"; }
-function aptLabel(id) { return APARTMENTS.find(a => a.id === id)?.label || id; }
 
 // ────────────────────────────────────────────
 //  LOADING SCREEN
@@ -140,7 +133,10 @@ function LoginScreen({ onLogin }) {
 // ────────────────────────────────────────────
 //  CLEANER VIEW
 // ────────────────────────────────────────────
-function CleanerView({ bookings, onToggleCleaning, onLogout }) {
+function CleanerView({ bookings, onToggleCleaning, onLogout, apartments }) {
+  const aptColor = (id) => apartments.find(a => a.id === id)?.color || "#c9a96e";
+  const aptLabel = (id) => apartments.find(a => a.id === id)?.label || id;
+
   const today = new Date().toISOString().split("T")[0];
   const tomorrow = new Date(Date.now()+86400000).toISOString().split("T")[0];
   const in3days = new Date(Date.now()+86400000*3).toISOString().split("T")[0];
@@ -187,17 +183,8 @@ function CleanerView({ bookings, onToggleCleaning, onLogout }) {
                   {nightCount(b.checkin,b.checkout)} notti di soggiorno
                 </div>
               </div>
-              <button
-                onClick={() => onToggleCleaning(b.id)}
-                style={{
-                  flexShrink:0,
-                  display:"flex",flexDirection:"column",alignItems:"center",gap:"0.2rem",
-                  padding:"0.7rem 0.8rem",borderRadius:"10px",border:`1px solid ${b.cleaning ? "#6ec99a55":"#3a3020"}`,
-                  cursor:"pointer",fontFamily:"Georgia,serif",fontSize:"0.65rem",
-                  background: b.cleaning ? "#1a2a1a" : "#1a1612",
-                  color: b.cleaning ? "#6ec99a" : "#8a7a60",
-                  minWidth:"60px",
-                }}>
+              <button onClick={() => onToggleCleaning(b.id)}
+                style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:"0.2rem",padding:"0.7rem 0.8rem",borderRadius:"10px",border:`1px solid ${b.cleaning ? "#6ec99a55":"#3a3020"}`,cursor:"pointer",fontFamily:"Georgia,serif",fontSize:"0.65rem",background:b.cleaning?"#1a2a1a":"#1a1612",color:b.cleaning?"#6ec99a":"#8a7a60",minWidth:"60px"}}>
                 <span style={{fontSize:"1.4rem"}}>{b.cleaning ? "✅" : "⬜"}</span>
                 <span>{b.cleaning ? "Fatto" : "Da fare"}</span>
               </button>
@@ -220,12 +207,9 @@ function CleanerView({ bookings, onToggleCleaning, onLogout }) {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"0.6rem"}}>
           <div style={{display:"flex",gap:"0.22rem",background:"#120f0a",borderRadius:"9px",padding:"0.2rem",border:"1px solid #2a2010"}}>
-            {APARTMENTS.map(a => (
+            {apartments.map(a => (
               <button key={a.id} onClick={() => setAptFilter(a.id)}
-                style={{padding:"0.28rem 0.5rem",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"0.65rem",fontFamily:"'Playfair Display',serif",
-                  background: aptFilter === a.id ? a.color : "transparent",
-                  color: aptFilter === a.id ? "#0a0806" : "#8a7a60",
-                  fontWeight: aptFilter === a.id ? "700" : "400"}}>
+                style={{padding:"0.28rem 0.5rem",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"0.65rem",fontFamily:"'Playfair Display',serif",background:aptFilter===a.id?a.color:"transparent",color:aptFilter===a.id?"#0a0806":"#8a7a60",fontWeight:aptFilter===a.id?"700":"400"}}>
                 {a.label}
               </button>
             ))}
@@ -281,7 +265,7 @@ const Field = ({ label, children }) => (
 const iS = { width:"100%",background:"#120f0a",border:"1px solid #3a3020",borderRadius:"8px",padding:"0.6rem 0.8rem",color:"#e8d5b0",fontFamily:"Georgia,serif",fontSize:"0.9rem",outline:"none",boxSizing:"border-box" };
 const btnP = { background:"linear-gradient(135deg,#c9a96e,#a07840)",border:"none",borderRadius:"8px",padding:"0.7rem 1.5rem",color:"#0a0806",fontWeight:"700",cursor:"pointer",fontFamily:"'Playfair Display',serif",fontSize:"0.9rem",letterSpacing:"0.05em" };
 
-const DayPopup = ({ dayBookings, dateStr, onClose }) => (
+const DayPopup = ({ dayBookings, dateStr, onClose, aptColor, aptLabel }) => (
   <div style={{position:"fixed",inset:0,background:"rgba(10,8,6,0.85)",zIndex:900,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
     <div style={{background:"#1a1612",border:"1px solid #3a3020",borderRadius:"20px 20px 0 0",padding:"1.5rem",width:"100%",maxWidth:"480px",maxHeight:"60vh",overflowY:"auto"}}>
       <div style={{width:"36px",height:"4px",background:"#3a3020",borderRadius:"2px",margin:"0 auto 1rem"}}/>
@@ -298,7 +282,7 @@ const DayPopup = ({ dayBookings, dateStr, onClose }) => (
             <div style={{color:"#6a5a40",fontSize:"0.78rem"}}>{formatDate(b.checkin)} → {formatDate(b.checkout)} · {nightCount(b.checkin,b.checkout)} notti</div>
             <div style={{display:"flex",gap:"0.5rem",marginTop:"0.3rem",flexWrap:"wrap"}}>
               <span style={{color:"#c9a96e",fontSize:"0.8rem"}}>€{b.price}</span>
-              <span style={{color: b.depositPaid ? "#6ec99a":"#c9a96e",fontSize:"0.72rem",background: b.depositPaid?"#1a2a1a":"#2a2010",padding:"0.1rem 0.4rem",borderRadius:"4px"}}>{b.depositPaid?"✓":"○"} Caparra €{b.deposit}</span>
+              <span style={{color:b.depositPaid?"#6ec99a":"#c9a96e",fontSize:"0.72rem",background:b.depositPaid?"#1a2a1a":"#2a2010",padding:"0.1rem 0.4rem",borderRadius:"4px"}}>{b.depositPaid?"✓":"○"} Caparra €{b.deposit}</span>
             </div>
             {b.notes && <div style={{color:"#8a7a60",fontSize:"0.72rem",fontStyle:"italic",marginTop:"0.25rem"}}>📝 {b.notes}</div>}
           </div>
@@ -310,12 +294,18 @@ const DayPopup = ({ dayBookings, dateStr, onClose }) => (
 // ────────────────────────────────────────────
 //  OWNER VIEW
 // ────────────────────────────────────────────
-function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, onDeleteBooking, onToggleCleaning, onToggleCheckin, onToggleDeposit, onAddExpense, onUpdateExpense, onDeleteExpense, onLogout }) {
+function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, onDeleteBooking, onToggleCleaning, onToggleCheckin, onToggleDeposit, onAddExpense, onUpdateExpense, onDeleteExpense, onLogout, apartments, onAddApartment, onUpdateApartment, onDeleteApartment }) {
+  const aptColor = (id) => apartments.find(a => a.id === id)?.color || "#c9a96e";
+  const aptLabel = (id) => apartments.find(a => a.id === id)?.label || id;
+  const realApts = apartments.filter(a => a.id !== "all");
+
   const [activeFilter, setActiveFilter] = useState("all");
   const [section, setSection] = useState("dashboard");
   const [modal, setModal] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [dayPopup, setDayPopup] = useState(null);
+  const [aptModal, setAptModal] = useState(null);
+  const [aptForm, setAptForm] = useState({ id: "", label: "", color: COLOR_PALETTE[0] });
 
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
@@ -324,8 +314,8 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
   function prevMonth() { if (calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); }
   function nextMonth() { if (calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1); }
 
-  const emptyBooking = {apt:"apt1",guest:"",email:"",phone:"",checkin:"",checkout:"",price:"",deposit:"",depositPaid:false,platform:"Airbnb",notes:"",cleaning:false,checkinDone:false};
-  const emptyExpense = {apt:"apt1",date:"",category:"Pulizie",description:"",amount:""};
+  const emptyBooking = {apt:realApts[0]?.id||"apt1",guest:"",email:"",phone:"",checkin:"",checkout:"",price:"",deposit:"",depositPaid:false,platform:"Airbnb",notes:"",cleaning:false,checkinDone:false};
+  const emptyExpense = {apt:realApts[0]?.id||"apt1",date:"",category:"Pulizie",description:"",amount:""};
   const [bForm, setBForm] = useState(emptyBooking);
   const [eForm, setEForm] = useState(emptyExpense);
 
@@ -360,6 +350,25 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
 
   const openEditB = (b) => { setBForm({...b}); setEditItem(b.id); setModal("booking"); };
   const openEditE = (e) => { setEForm({...e}); setEditItem(e.id); setModal("expense"); };
+
+  function openAddApt() {
+    setAptForm({ id: `apt_${Date.now()}`, label: "", color: COLOR_PALETTE[0] });
+    setAptModal("add");
+  }
+  function openEditApt(apt) { setAptForm({...apt}); setAptModal("edit"); }
+  function saveApt() {
+    if (!aptForm.label.trim()) return;
+    if (aptModal === "add") onAddApartment({...aptForm, label: aptForm.label.trim()});
+    else onUpdateApartment({...aptForm, label: aptForm.label.trim()});
+    setAptModal(null);
+  }
+  function deleteApt(id) {
+    if (bookings.some(b => b.apt === id)) {
+      alert("Impossibile eliminare: ci sono prenotazioni associate a questo appartamento.");
+      return;
+    }
+    onDeleteApartment(id);
+  }
 
   const daysInMonth = new Date(calYear,calMonth+1,0).getDate();
   const firstDay = ((new Date(calYear,calMonth,1).getDay())+6)%7;
@@ -402,12 +411,9 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"0.4rem"}}>
           <div style={{display:"flex",gap:"0.22rem",background:"#120f0a",borderRadius:"9px",padding:"0.2rem",border:"1px solid #2a2010"}}>
-            {APARTMENTS.map(a=>(
+            {apartments.map(a=>(
               <button key={a.id} onClick={()=>setActiveFilter(a.id)}
-                style={{padding:"0.3rem 0.55rem",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"0.65rem",fontFamily:"'Playfair Display',serif",
-                  background:activeFilter===a.id?a.color:"transparent",
-                  color:activeFilter===a.id?"#0a0806":"#8a7a60",
-                  fontWeight:activeFilter===a.id?"700":"400"}}>
+                style={{padding:"0.3rem 0.55rem",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"0.65rem",fontFamily:"'Playfair Display',serif",background:activeFilter===a.id?a.color:"transparent",color:activeFilter===a.id?"#0a0806":"#8a7a60",fontWeight:activeFilter===a.id?"700":"400"}}>
                 {a.label}
               </button>
             ))}
@@ -424,13 +430,10 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
           {id:"finances",icon:"💰",label:"Finanze"},
           {id:"guests",icon:"👤",label:"Ospiti"},
           {id:"operations",icon:"🧹",label:"Operaz."},
+          {id:"settings",icon:"⚙️",label:"Impost."},
         ].map(s=>(
           <button key={s.id} onClick={()=>setSection(s.id)}
-            style={{padding:"0.65rem 0.85rem",border:"none",background:"none",cursor:"pointer",
-              color:section===s.id?"#c9a96e":"#5a4a30",
-              borderBottom:section===s.id?"2px solid #c9a96e":"2px solid transparent",
-              fontFamily:"'Playfair Display',serif",fontSize:"0.7rem",whiteSpace:"nowrap",
-              display:"flex",flexDirection:"column",alignItems:"center",gap:"0.15rem",flexShrink:0}}>
+            style={{padding:"0.65rem 0.85rem",border:"none",background:"none",cursor:"pointer",color:section===s.id?"#c9a96e":"#5a4a30",borderBottom:section===s.id?"2px solid #c9a96e":"2px solid transparent",fontFamily:"'Playfair Display',serif",fontSize:"0.7rem",whiteSpace:"nowrap",display:"flex",flexDirection:"column",alignItems:"center",gap:"0.15rem",flexShrink:0}}>
             <span style={{fontSize:"0.9rem"}}>{s.icon}</span><span>{s.label}</span>
           </button>
         ))}
@@ -598,11 +601,11 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
                 })}
               </div>
             </div>
-            <div style={{display:"flex",gap:"1.2rem",marginTop:"0.7rem"}}>
-              {APARTMENTS.filter(a=>a.id!=="all").map(a=>(
+            <div style={{display:"flex",gap:"1.2rem",marginTop:"0.7rem",flexWrap:"wrap"}}>
+              {realApts.map(a=>(
                 <span key={a.id} style={{fontSize:"0.72rem",color:a.color,display:"flex",alignItems:"center",gap:"0.35rem"}}>
                   <span style={{width:"14px",height:"5px",borderRadius:"2px",background:a.color,display:"inline-block"}}/>
-                  {a.id==="apt1"?"🌊 Appartamento Mare":"⛰️ Appartamento Monte"}
+                  {a.label}
                 </span>
               ))}
               <span style={{fontSize:"0.65rem",color:"#4a3a20",marginLeft:"auto"}}>Tocca per dettagli</span>
@@ -736,12 +739,37 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
             </div>
           </div>
         )}
+
+        {/* IMPOSTAZIONI */}
+        {section==="settings"&&(
+          <div>
+            <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.2rem",marginBottom:"0.9rem",marginTop:"0.4rem"}}>Impostazioni</h2>
+            <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.8rem"}}>
+                <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.95rem"}}>🏠 Appartamenti</h3>
+                <button onClick={openAddApt} style={btnP}>+ Nuovo</button>
+              </div>
+              {realApts.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem",margin:0}}>Nessun appartamento.</p>}
+              {realApts.map((apt,i)=>(
+                <div key={apt.id} style={{display:"flex",alignItems:"center",gap:"0.7rem",padding:"0.65rem 0",borderTop:i>0?"1px solid #1a1510":"none"}}>
+                  <div style={{width:"22px",height:"22px",borderRadius:"6px",background:apt.color,flexShrink:0,border:"1px solid rgba(255,255,255,0.1)"}}/>
+                  <span style={{flex:1,color:"#e8d5b0",fontSize:"0.88rem"}}>{apt.label}</span>
+                  <span style={{fontSize:"0.62rem",color:"#4a3a20",background:"#0d0a07",padding:"0.1rem 0.45rem",borderRadius:"4px",border:"1px solid #2a2010"}}>
+                    {bookings.filter(b=>b.apt===apt.id).length} prenot.
+                  </span>
+                  <button onClick={()=>openEditApt(apt)} style={{background:"#2a2010",border:"1px solid #3a3020",borderRadius:"6px",padding:"0.25rem 0.5rem",color:"#c9a96e",cursor:"pointer",fontSize:"0.68rem"}}>✏️</button>
+                  <button onClick={()=>deleteApt(apt.id)} style={{background:"#2a1010",border:"1px solid #3a1010",borderRadius:"6px",padding:"0.25rem 0.5rem",color:"#c96e6e",cursor:"pointer",fontSize:"0.68rem"}}>🗑</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modal Prenotazione */}
       {modal==="booking"&&(
         <Modal title={editItem?"Modifica Prenotazione":"Nuova Prenotazione"} onClose={()=>{setModal(null);setEditItem(null);}}>
-          <Field label="Appartamento"><select value={bForm.apt} onChange={e=>setBForm({...bForm,apt:e.target.value})} style={iS}>{APARTMENTS.filter(a=>a.id!=="all").map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
+          <Field label="Appartamento"><select value={bForm.apt} onChange={e=>setBForm({...bForm,apt:e.target.value})} style={iS}>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
           <Field label="Nome Ospite"><input value={bForm.guest} onChange={e=>setBForm({...bForm,guest:e.target.value})} style={iS} placeholder="Nome Cognome"/></Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
             <Field label="Email"><input value={bForm.email} onChange={e=>setBForm({...bForm,email:e.target.value})} style={iS} placeholder="email@..." type="email"/></Field>
@@ -773,7 +801,7 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
       {/* Modal Spesa */}
       {modal==="expense"&&(
         <Modal title={editItem?"Modifica Spesa":"Nuova Spesa"} onClose={()=>{setModal(null);setEditItem(null);}}>
-          <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}>{APARTMENTS.filter(a=>a.id!=="all").map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
+          <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
             <Field label="Data"><input type="date" value={eForm.date} onChange={e=>setEForm({...eForm,date:e.target.value})} style={iS}/></Field>
             <Field label="Categoria"><select value={eForm.category} onChange={e=>setEForm({...eForm,category:e.target.value})} style={iS}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></Field>
@@ -787,7 +815,28 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
         </Modal>
       )}
 
-      {dayPopup&&<DayPopup dayBookings={dayPopup.bookings} dateStr={dayPopup.dateStr} onClose={()=>setDayPopup(null)}/>}
+      {/* Modal Appartamento */}
+      {aptModal&&(
+        <Modal title={aptModal==="add"?"Nuovo Appartamento":"Modifica Appartamento"} onClose={()=>setAptModal(null)}>
+          <Field label="Nome">
+            <input value={aptForm.label} onChange={e=>setAptForm({...aptForm,label:e.target.value})} style={iS} placeholder="Es. 🌊 App. Mare"/>
+          </Field>
+          <Field label="Colore">
+            <div style={{display:"flex",flexWrap:"wrap",gap:"0.5rem",marginTop:"0.2rem"}}>
+              {COLOR_PALETTE.map(color=>(
+                <div key={color} onClick={()=>setAptForm({...aptForm,color})}
+                  style={{width:"32px",height:"32px",borderRadius:"8px",background:color,cursor:"pointer",border:aptForm.color===color?"2px solid #e8d5b0":"2px solid transparent",boxShadow:aptForm.color===color?"0 0 0 1px rgba(255,255,255,0.25)":"none"}}/>
+              ))}
+            </div>
+          </Field>
+          <div style={{display:"flex",gap:"0.65rem",marginTop:"0.5rem"}}>
+            <button onClick={()=>setAptModal(null)} style={{...btnP,flex:1,background:"#2a2010",color:"#8a7a60"}}>Annulla</button>
+            <button onClick={saveApt} style={{...btnP,flex:1}}>Salva</button>
+          </div>
+        </Modal>
+      )}
+
+      {dayPopup&&<DayPopup dayBookings={dayPopup.bookings} dateStr={dayPopup.dateStr} onClose={()=>setDayPopup(null)} aptColor={aptColor} aptLabel={aptLabel}/>}
     </div>
   );
 }
@@ -800,6 +849,18 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [apartments, setApartments] = useState(() => {
+    try {
+      const saved = localStorage.getItem("gestaffitti_apartments");
+      return saved ? JSON.parse(saved) : DEFAULT_APARTMENTS;
+    } catch {
+      return DEFAULT_APARTMENTS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("gestaffitti_apartments", JSON.stringify(apartments));
+  }, [apartments]);
 
   useEffect(() => {
     async function fetchData() {
@@ -813,6 +874,10 @@ export default function App() {
     }
     fetchData();
   }, []);
+
+  const addApartment = (apt) => setApartments(prev => [...prev, apt]);
+  const updateApartment = (apt) => setApartments(prev => prev.map(a => a.id === apt.id ? apt : a));
+  const deleteApartment = (id) => setApartments(prev => prev.filter(a => a.id !== id));
 
   const addBooking = async (formData) => {
     const row = bookingToDb(formData);
@@ -873,7 +938,7 @@ export default function App() {
   if (!user) return <LoginScreen onLogin={setUser} />;
 
   if (user.role === "cleaner") {
-    return <CleanerView bookings={bookings} onToggleCleaning={toggleCleaning} onLogout={() => setUser(null)} />;
+    return <CleanerView bookings={bookings} onToggleCleaning={toggleCleaning} onLogout={() => setUser(null)} apartments={apartments}/>;
   }
 
   return (
@@ -891,6 +956,10 @@ export default function App() {
       onUpdateExpense={updateExpense}
       onDeleteExpense={deleteExpense}
       onLogout={() => setUser(null)}
+      apartments={apartments}
+      onAddApartment={addApartment}
+      onUpdateApartment={updateApartment}
+      onDeleteApartment={deleteApartment}
     />
   );
 }
