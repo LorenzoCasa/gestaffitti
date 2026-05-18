@@ -8,8 +8,8 @@ const USERS = [
 
 const APARTMENTS = [
   { id: "all", label: "Tutti", color: "#c9a96e" },
-  { id: "apt1", label: "App. Mare", color: "#6e9ec9" },
-  { id: "apt2", label: "App. Monte", color: "#c96e9e" },
+  { id: "apt1", label: "🌊 App. Mare", color: "#6e9ec9" },
+  { id: "apt2", label: "⛰️ App. Monte", color: "#c96e9e" },
 ];
 
 const PLATFORMS = ["Airbnb", "Booking", "Diretto", "Altro"];
@@ -602,7 +602,7 @@ function OwnerView({ user, bookings, expenses, onAddBooking, onUpdateBooking, on
               {APARTMENTS.filter(a=>a.id!=="all").map(a=>(
                 <span key={a.id} style={{fontSize:"0.72rem",color:a.color,display:"flex",alignItems:"center",gap:"0.35rem"}}>
                   <span style={{width:"14px",height:"5px",borderRadius:"2px",background:a.color,display:"inline-block"}}/>
-                  {a.id==="apt1"?"Appartamento Mare":"Appartamento Monte"}
+                  {a.id==="apt1"?"🌊 Appartamento Mare":"⛰️ Appartamento Monte"}
                 </span>
               ))}
               <span style={{fontSize:"0.65rem",color:"#4a3a20",marginLeft:"auto"}}>Tocca per dettagli</span>
