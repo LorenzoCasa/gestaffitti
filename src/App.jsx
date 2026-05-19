@@ -1,16 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
-const USERS = [
-  { username: "proprietario", password: "casa2026", role: "owner", label: "Proprietario" },
-  { username: "pulizie", password: "pulisco123", role: "cleaner", label: "Addetta Pulizie" },
-];
-
-const DEFAULT_APARTMENTS = [
-  { id: "all", label: "Tutti", color: "#c9a96e" },
-  { id: "apt1", label: "🌊 App. Mare", color: "#6e9ec9" },
-  { id: "apt2", label: "⛰️ App. Monte", color: "#c96e9e" },
-];
+const APT_ALL = { id: "all", label: "Tutti", color: "#c9a96e" };
 
 const COLOR_PALETTE = [
   "#6e9ec9","#c96e9e","#9ec96e","#c9a96e","#6ec9a9",
@@ -92,15 +83,26 @@ function LoadingScreen() {
 // ────────────────────────────────────────────
 //  LOGIN SCREEN
 // ────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
-  const [username, setUsername] = useState("");
+function LoginScreen({ profileError }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(profileError ? "Profilo non configurato, contatta l'amministratore" : "");
   const [showPw, setShowPw] = useState(false);
-  function handleLogin() {
-    const user = USERS.find(u => u.username === username.trim().toLowerCase() && u.password === password);
-    if (user) { setError(""); onLogin(user); } else setError("Credenziali non corrette");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    if (!email.trim() || !password) { setError("Inserisci email e password"); return; }
+    setLoading(true);
+    setError("");
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (authError) {
+      setError("Email o password non corretti");
+      setLoading(false);
+    }
+    // Se il login ha successo, onAuthStateChange nel root App gestisce il resto
   }
+
+  const iS = {width:"100%",background:"#0d0a07",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.75rem 1rem",color:"#e8d5b0",fontFamily:"Georgia,serif",fontSize:"0.9rem",outline:"none",boxSizing:"border-box"};
   return (
     <div style={{minHeight:"100vh",background:"#0a0806",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"1.5rem",fontFamily:"Georgia,serif"}}>
       <div style={{textAlign:"center",marginBottom:"2.5rem"}}>
@@ -111,34 +113,21 @@ function LoginScreen({ onLogin }) {
       <div style={{background:"#120f0a",border:"1px solid #3a3020",borderRadius:"20px",padding:"2rem",width:"100%",maxWidth:"360px",boxShadow:"0 24px 60px rgba(0,0,0,0.5)"}}>
         <h2 style={{fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"1.1rem",margin:"0 0 1.5rem",textAlign:"center",letterSpacing:"0.04em"}}>Accedi</h2>
         <div style={{marginBottom:"1rem"}}>
-          <label style={{display:"block",color:"#8a7a60",fontSize:"0.68rem",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.35rem",fontFamily:"'Playfair Display',serif"}}>Utente</label>
-          <input value={username} onChange={e=>{setUsername(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="proprietario / pulizie"
-            style={{width:"100%",background:"#0d0a07",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.75rem 1rem",color:"#e8d5b0",fontFamily:"Georgia,serif",fontSize:"0.9rem",outline:"none",boxSizing:"border-box"}}/>
+          <label style={{display:"block",color:"#8a7a60",fontSize:"0.68rem",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.35rem",fontFamily:"'Playfair Display',serif"}}>Email</label>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="utente@email.com" style={iS}/>
         </div>
         <div style={{marginBottom:"1.4rem"}}>
           <label style={{display:"block",color:"#8a7a60",fontSize:"0.68rem",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.35rem",fontFamily:"'Playfair Display',serif"}}>Password</label>
           <div style={{position:"relative"}}>
             <input type={showPw?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&handleLogin()} placeholder="••••••••"
-              style={{width:"100%",background:"#0d0a07",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.75rem 2.8rem 0.75rem 1rem",color:"#e8d5b0",fontFamily:"Georgia,serif",fontSize:"0.9rem",outline:"none",boxSizing:"border-box"}}/>
+              style={{...iS,padding:"0.75rem 2.8rem 0.75rem 1rem"}}/>
             <button onClick={()=>setShowPw(s=>!s)} style={{position:"absolute",right:"0.8rem",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#6a5a40",cursor:"pointer",fontSize:"1rem",lineHeight:1}}>{showPw?"🙈":"👁"}</button>
           </div>
         </div>
         {error&&<div style={{background:"rgba(201,110,110,0.12)",border:"1px solid #c96e6e44",borderRadius:"8px",padding:"0.6rem 0.8rem",color:"#c96e6e",fontSize:"0.8rem",textAlign:"center",marginBottom:"1rem"}}>{error}</div>}
-        <button onClick={handleLogin} style={{width:"100%",background:"linear-gradient(135deg,#c9a96e,#a07840)",border:"none",borderRadius:"10px",padding:"0.85rem",color:"#0a0806",fontWeight:"700",cursor:"pointer",fontFamily:"'Playfair Display',serif",fontSize:"1rem",letterSpacing:"0.05em"}}>Entra</button>
-        <div style={{marginTop:"1.5rem",borderTop:"1px solid #2a2010",paddingTop:"1rem"}}>
-          <div style={{color:"#4a3a20",fontSize:"0.68rem",textAlign:"center",marginBottom:"0.6rem",letterSpacing:"0.06em",textTransform:"uppercase"}}>Accessi disponibili</div>
-          <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
-            {[{icon:"👑",name:"Proprietario",desc:"Accesso completo a tutto",color:"#c9a96e"},{icon:"🧹",name:"Addetta Pulizie",desc:"Solo cambi e pulizie",color:"#6e9ec9"}].map(u=>(
-              <div key={u.name} style={{display:"flex",alignItems:"center",gap:"0.6rem",padding:"0.45rem 0.7rem",background:"#0d0a07",borderRadius:"8px"}}>
-                <span style={{fontSize:"0.9rem"}}>{u.icon}</span>
-                <div>
-                  <div style={{color:u.color,fontSize:"0.75rem",fontWeight:"600"}}>{u.name}</div>
-                  <div style={{color:"#5a4a30",fontSize:"0.65rem"}}>{u.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <button onClick={handleLogin} disabled={loading} style={{width:"100%",background:loading?"#3a3020":"linear-gradient(135deg,#c9a96e,#a07840)",border:"none",borderRadius:"10px",padding:"0.85rem",color:"#0a0806",fontWeight:"700",cursor:loading?"not-allowed":"pointer",fontFamily:"'Playfair Display',serif",fontSize:"1rem",letterSpacing:"0.05em",opacity:loading?0.7:1}}>
+          {loading?"Accesso in corso...":"Entra"}
+        </button>
       </div>
     </div>
   );
@@ -957,33 +946,59 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 // ────────────────────────────────────────────
 export default function App() {
   const [user,setUser]=useState(null);
+  const [profileError,setProfileError]=useState(false);
   const [bookings,setBookings]=useState([]);
   const [expenses,setExpenses]=useState([]);
+  const [apartments,setApartments]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [apartments,setApartments]=useState(()=>{
-    try{const s=localStorage.getItem("gestaffitti_apartments");return s?JSON.parse(s):DEFAULT_APARTMENTS;}
-    catch{return DEFAULT_APARTMENTS;}
-  });
-  useEffect(()=>{localStorage.setItem("gestaffitti_apartments",JSON.stringify(apartments));},[apartments]);
+
+  async function handleSession(session){
+    setProfileError(false);
+    const{data:profile,error}=await supabase.from("profiles").select("role").eq("id",session.user.id).single();
+    if(error||!profile){
+      console.error("[auth] Profilo non trovato per",session.user.id,error);
+      setProfileError(true);setLoading(false);return;
+    }
+    setUser({id:session.user.id,email:session.user.email,role:profile.role});
+    const[{data:bData},{data:eData},{data:aptData}]=await Promise.all([
+      supabase.from("bookings").select("*").order("checkin"),
+      supabase.from("expenses").select("*").order("date",{ascending:false}),
+      supabase.from("apartments").select("*").order("label"),
+    ]);
+    if(bData) setBookings(bData.map(dbToBooking));
+    if(eData) setExpenses(eData);
+    setApartments(aptData?.length?[APT_ALL,...aptData]:[APT_ALL]);
+    setLoading(false);
+  }
 
   useEffect(()=>{
-    async function fetchData(){
-      const[{data:bData},{data:eData}]=await Promise.all([
-        supabase.from("bookings").select("*").order("checkin"),
-        supabase.from("expenses").select("*").order("date",{ascending:false}),
-      ]);
-      if(bData) setBookings(bData.map(dbToBooking));
-      if(eData) setExpenses(eData);
-      setLoading(false);
-    }
-    fetchData();
+    supabase.auth.getSession().then(({data:{session}})=>{
+      if(session) handleSession(session);
+      else setLoading(false);
+    });
+    const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event,session)=>{
+      if(event==="SIGNED_IN"&&session){setLoading(true);await handleSession(session);}
+      else if(event==="SIGNED_OUT"){setUser(null);setProfileError(false);setBookings([]);setExpenses([]);setApartments([]);}
+    });
+    return()=>subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const expensesWithMeta=expenses.map(e=>({...e,paid:e.paid||false,notes:e.notes||"",rate_group:e.rate_group||null}));
 
-  const addApartment=(apt)=>setApartments(prev=>[...prev,apt]);
-  const updateApartment=(apt)=>setApartments(prev=>prev.map(a=>a.id===apt.id?apt:a));
-  const deleteApartment=(id)=>setApartments(prev=>prev.filter(a=>a.id!==id));
+  const addApartment=async(apt)=>{
+    const{data,error}=await supabase.from("apartments").insert({id:apt.id,label:apt.label,color:apt.color}).select().single();
+    if(error){alert("Errore salvataggio appartamento: "+error.message);return;}
+    if(data) setApartments(prev=>[...prev,data]);
+  };
+  const updateApartment=async(apt)=>{
+    const{error}=await supabase.from("apartments").update({label:apt.label,color:apt.color}).eq("id",apt.id);
+    if(!error) setApartments(prev=>prev.map(a=>a.id===apt.id?apt:a));
+  };
+  const deleteApartment=async(id)=>{
+    const{error}=await supabase.from("apartments").delete().eq("id",id);
+    if(!error) setApartments(prev=>prev.filter(a=>a.id!==id));
+  };
 
   const addBooking=async(formData)=>{
     const row=bookingToDb(formData);
@@ -1063,9 +1078,11 @@ export default function App() {
     setExpenses(es=>es.filter(e=>e.id!==id));
   };
 
+  const handleLogout=async()=>{await supabase.auth.signOut();};
+
   if(loading) return <LoadingScreen/>;
-  if(!user) return <LoginScreen onLogin={setUser}/>;
-  if(user.role==="cleaner") return <CleanerView bookings={bookings} onToggleCleaning={toggleCleaning} onLogout={()=>setUser(null)} apartments={apartments}/>;
+  if(!user) return <LoginScreen profileError={profileError}/>;
+  if(user.role==="cleaner") return <CleanerView bookings={bookings} onToggleCleaning={toggleCleaning} onLogout={handleLogout} apartments={apartments}/>;
 
   return (
     <OwnerView
@@ -1073,7 +1090,7 @@ export default function App() {
       onAddBooking={addBooking} onUpdateBooking={updateBooking} onDeleteBooking={deleteBooking}
       onToggleCleaning={toggleCleaning} onToggleCheckin={toggleCheckin} onToggleDeposit={toggleDeposit}
       onAddExpense={addExpense} onUpdateExpense={updateExpense} onDeleteExpense={deleteExpense} onToggleExpensePaid={toggleExpensePaid}
-      onLogout={()=>setUser(null)}
+      onLogout={handleLogout}
       apartments={apartments} onAddApartment={addApartment} onUpdateApartment={updateApartment} onDeleteApartment={deleteApartment}
     />
   );
