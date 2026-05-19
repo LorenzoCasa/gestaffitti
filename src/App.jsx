@@ -430,6 +430,17 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 
       <main style={{padding:"0.9rem",maxWidth:"900px",margin:"0 auto",paddingBottom:"2.5rem"}}>
 
+        {/* Banner nessun appartamento */}
+        {realApts.length===0&&(
+          <div style={{background:"rgba(201,169,110,0.08)",border:"1px solid #c9a96e44",borderRadius:"10px",padding:"0.9rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"0.7rem"}}>
+            <span style={{fontSize:"1.2rem"}}>🏠</span>
+            <div>
+              <div style={{color:"#c9a96e",fontWeight:"600",fontSize:"0.85rem",marginBottom:"0.1rem"}}>Nessun appartamento configurato</div>
+              <div style={{color:"#6a5a40",fontSize:"0.72rem"}}>Vai in <strong style={{color:"#c9a96e"}}>Impostazioni</strong> per aggiungere il primo appartamento.</div>
+            </div>
+          </div>
+        )}
+
         {/* DASHBOARD */}
         {section==="dashboard"&&(
           <div>
@@ -505,7 +516,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.9rem"}}>
               <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.2rem",margin:0}}>Prenotazioni</h2>
-              <button onClick={()=>{setBForm(emptyBooking);setEditItem(null);setModal("booking");}} style={btnP}>+ Nuova</button>
+              <button onClick={()=>{if(realApts.length===0){alert("Nessun appartamento configurato. Aggiungine uno in Impostazioni.");return;}setBForm(emptyBooking);setEditItem(null);setModal("booking");}} style={btnP}>+ Nuova</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:"0.6rem"}}>
               {filteredBookings.length===0&&<p style={{color:"#5a4a30"}}>Nessuna prenotazione.</p>}
@@ -731,7 +742,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
             {/* Registro Spese */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem"}}>
               <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#8a7a60",fontSize:"0.88rem"}}>Registro Spese</h3>
-              <button onClick={()=>{setEForm(emptyExpense);setEditItem(null);setModal("expense");}} style={btnP}>+ Spesa</button>
+              <button onClick={()=>{if(realApts.length===0){alert("Nessun appartamento configurato. Aggiungine uno in Impostazioni.");return;}setEForm(emptyExpense);setEditItem(null);setModal("expense");}} style={btnP}>+ Spesa</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:"0.45rem"}}>
               {filteredExpenses.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem"}}>Nessuna spesa.</p>}
@@ -822,7 +833,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
                 <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.95rem"}}>🏠 Appartamenti</h3>
                 <button onClick={openAddApt} style={btnP}>+ Nuovo</button>
               </div>
-              {realApts.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem",margin:0}}>Nessun appartamento.</p>}
+              {realApts.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem",margin:0}}>Nessun appartamento configurato. Aggiungine uno con il pulsante + Nuovo.</p>}
               {realApts.map((apt,i)=>(
                 <div key={apt.id} style={{display:"flex",alignItems:"center",gap:"0.7rem",padding:"0.65rem 0",borderTop:i>0?"1px solid #1a1510":"none"}}>
                   <div style={{width:"22px",height:"22px",borderRadius:"6px",background:apt.color,flexShrink:0,border:"1px solid rgba(255,255,255,0.1)"}}/>
@@ -947,6 +958,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 export default function App() {
   const [user,setUser]=useState(null);
   const [profileError,setProfileError]=useState(false);
+  const [aptLoadError,setAptLoadError]=useState(false);
   const [bookings,setBookings]=useState([]);
   const [expenses,setExpenses]=useState([]);
   const [apartments,setApartments]=useState([]);
@@ -962,14 +974,20 @@ export default function App() {
       setProfileError(true);setLoading(false);return;
     }
     setUser({id:session.user.id,email:session.user.email,role:profile.role});
-    const[{data:bData},{data:eData},{data:aptData}]=await Promise.all([
+    const[{data:bData},{data:eData},{data:aptData,error:aptErr}]=await Promise.all([
       supabase.from("bookings").select("*").order("checkin"),
       supabase.from("expenses").select("*").order("date",{ascending:false}),
-      supabase.from("apartments").select("*").order("label"),
+      supabase.from("apartments").select("*").eq("active",true).order("label"),
     ]);
     if(bData) setBookings(bData.map(dbToBooking));
     if(eData) setExpenses(eData);
-    setApartments(aptData?.length?[APT_ALL,...aptData]:[APT_ALL]);
+    if(aptErr){
+      console.error("[apartments] Errore caricamento:",aptErr.message);
+      setAptLoadError(true);
+    } else {
+      setAptLoadError(false);
+      setApartments(aptData?.length?[APT_ALL,...aptData]:[APT_ALL]);
+    }
     setLoading(false);
   }
 
@@ -986,7 +1004,7 @@ export default function App() {
         setLoading(true);
         await handleSession(session);
       } else if(event==="SIGNED_OUT"){
-        setUser(null);setProfileError(false);setBookings([]);setExpenses([]);setApartments([]);
+        setUser(null);setProfileError(false);setAptLoadError(false);setBookings([]);setExpenses([]);setApartments([]);
       }
     });
     return()=>subscription.unsubscribe();
@@ -996,7 +1014,7 @@ export default function App() {
   const expensesWithMeta=expenses.map(e=>({...e,paid:e.paid||false,notes:e.notes||"",rate_group:e.rate_group||null}));
 
   const addApartment=async(apt)=>{
-    const{data,error}=await supabase.from("apartments").insert({id:apt.id,label:apt.label,color:apt.color}).select().single();
+    const{data,error}=await supabase.from("apartments").insert({id:apt.id,label:apt.label,color:apt.color,active:true}).select().single();
     if(error){alert("Errore salvataggio appartamento: "+error.message);return;}
     if(data) setApartments(prev=>[...prev,data]);
   };
@@ -1005,7 +1023,8 @@ export default function App() {
     if(!error) setApartments(prev=>prev.map(a=>a.id===apt.id?apt:a));
   };
   const deleteApartment=async(id)=>{
-    const{error}=await supabase.from("apartments").delete().eq("id",id);
+    // Soft-delete: imposta active=false invece di eliminare, per preservare lo storico
+    const{error}=await supabase.from("apartments").update({active:false}).eq("id",id);
     if(!error) setApartments(prev=>prev.filter(a=>a.id!==id));
   };
 
@@ -1091,6 +1110,14 @@ export default function App() {
 
   if(loading) return <LoadingScreen/>;
   if(!user) return <LoginScreen profileError={profileError}/>;
+  if(aptLoadError) return (
+    <div style={{minHeight:"100vh",background:"#0a0806",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem",fontFamily:"Georgia,serif",textAlign:"center"}}>
+      <div style={{fontSize:"2.5rem",marginBottom:"1rem"}}>⚠️</div>
+      <div style={{fontFamily:"'Playfair Display',serif",color:"#c96e6e",fontSize:"1.1rem",marginBottom:"0.5rem"}}>Errore caricamento appartamenti</div>
+      <div style={{color:"#6a5a40",fontSize:"0.8rem",marginBottom:"1.5rem"}}>Impossibile leggere la tabella apartments da Supabase.<br/>Verifica la connessione e le policy RLS.</div>
+      <button onClick={handleLogout} style={{background:"#2a1010",border:"1px solid #c96e6e44",borderRadius:"10px",padding:"0.65rem 1.5rem",color:"#c96e6e",cursor:"pointer",fontFamily:"'Playfair Display',serif",fontSize:"0.9rem"}}>Esci e riprova</button>
+    </div>
+  );
   if(user.role==="cleaner") return <CleanerView bookings={bookings} onToggleCleaning={toggleCleaning} onLogout={handleLogout} apartments={apartments}/>;
 
   return (
