@@ -1,69 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-
-const APT_ALL = { id: "all", label: "Tutti", color: "#c9a96e" };
-
-const COLOR_PALETTE = [
-  "#6e9ec9","#c96e9e","#9ec96e","#c9a96e","#6ec9a9",
-  "#c96e6e","#9e6ec9","#c9c96e","#6ec9c9","#c9906e",
-];
-
-const PLATFORMS = ["Airbnb", "Booking", "Subito", "Diretto", "Altro"];
-const COMMISSIONS = { Airbnb: 3, Booking: 15, Subito: 0, Diretto: 0, Altro: 0 };
-const CATEGORIES = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Pulizie","Manutenzione","Dotazioni","Assicurazione","Commissioni piattaforma","Altro"];
-const FIXED_CATS = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Assicurazione","Commissioni piattaforma"];
-const MGMT_CATS = ["Pulizie","Manutenzione","Dotazioni","Altro"];
-const PAYMENT_TYPES = ["Una tantum","Rata IMU (2 rate)","Rata Condominio (5 rate)","Mensile"];
-const MONTHS_LONG = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
-
-function dbToBooking(row) {
-  return { ...row, depositPaid: row.deposit_paid, checkinDone: row.checkin_done };
-}
-function bookingToDb(b) {
-  return {
-    apt: b.apt, guest: b.guest, email: b.email || "", phone: b.phone || "",
-    checkin: b.checkin, checkout: b.checkout, price: Number(b.price) || 0,
-    deposit: Number(b.deposit) || 0, deposit_paid: b.depositPaid || false,
-    platform: b.platform, notes: b.notes || "", cleaning: b.cleaning || false,
-    checkin_done: b.checkinDone || false,
-  };
-}
-function formatDate(d) {
-  if (!d) return "";
-  const [y, m, dd] = d.split("-");
-  return `${dd}/${m}/${y}`;
-}
-function nightCount(ci, co) {
-  if (!ci || !co) return 0;
-  return Math.max(0, (new Date(co) - new Date(ci)) / 86400000);
-}
-function getPeriodBounds(tab, month, quarter, year) {
-  if (tab === "mensile") {
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const m = String(month + 1).padStart(2, "0");
-    return [`${year}-${m}-01`, `${year}-${m}-${String(lastDay).padStart(2, "0")}`];
-  }
-  if (tab === "trimestrale") {
-    const sm = quarter * 3, em = sm + 2;
-    const lastDay = new Date(year, em + 1, 0).getDate();
-    return [`${year}-${String(sm+1).padStart(2,"0")}-01`, `${year}-${String(em+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`];
-  }
-  return [`${year}-01-01`, `${year}-12-31`];
-}
-function getPeriodLabel(tab, month, quarter, year) {
-  if (tab === "mensile") return `${MONTHS_LONG[month]} ${year}`;
-  if (tab === "trimestrale") return `T${quarter + 1} – ${year}`;
-  return `${year}`;
-}
-function expInPeriod(expense, periodStart, periodEnd) {
-  const d = expense.date;
-  if (!d) return 0;
-  return (d >= periodStart && d <= periodEnd) ? Number(expense.amount) : 0;
-}
-function fmtEur(n) {
-  return Math.round(n).toLocaleString("it-IT");
-}
+import {
+  APT_ALL, COLOR_PALETTE, PLATFORMS, COMMISSIONS,
+  CATEGORIES, FIXED_CATS, MGMT_CATS, PAYMENT_TYPES,
+  MONTHS, MONTHS_LONG,
+} from "./constants";
+import { formatDate, nightCount, getPeriodBounds, getPeriodLabel } from "./utils/dateUtils";
+import { expInPeriod, fmtEur } from "./utils/financeUtils";
+import { dbToBooking, bookingToDb } from "./utils/bookingUtils";
 
 // ────────────────────────────────────────────
 //  LOADING SCREEN
