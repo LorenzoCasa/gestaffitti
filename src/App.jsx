@@ -954,9 +954,11 @@ export default function App() {
 
   async function handleSession(session){
     setProfileError(false);
+    console.log("[handleSession] uid:", session.user.id, "email:", session.user.email);
     const{data:profile,error}=await supabase.from("profiles").select("role").eq("id",session.user.id).single();
+    console.log("[handleSession] profile:", profile, "error:", error);
     if(error||!profile){
-      console.error("[auth] Profilo non trovato per",session.user.id,error);
+      console.error("[auth] Profilo non trovato per",session.user.id,error?.message);
       setProfileError(true);setLoading(false);return;
     }
     setUser({id:session.user.id,email:session.user.email,role:profile.role});
@@ -972,13 +974,20 @@ export default function App() {
   }
 
   useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{
-      if(session) handleSession(session);
-      else setLoading(false);
-    });
+    // Usiamo SOLO onAuthStateChange perché garantisce che il JWT sia già applicato
+    // al client prima di scattare (a differenza di getSession che può precedere
+    // la propagazione interna del token necessaria per le query RLS).
     const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event,session)=>{
-      if(event==="SIGNED_IN"&&session){setLoading(true);await handleSession(session);}
-      else if(event==="SIGNED_OUT"){setUser(null);setProfileError(false);setBookings([]);setExpenses([]);setApartments([]);}
+      console.log("[auth] evento:", event, "user:", session?.user?.email||"none");
+      if(event==="INITIAL_SESSION"){
+        if(session) await handleSession(session);
+        else setLoading(false);
+      } else if(event==="SIGNED_IN"&&session){
+        setLoading(true);
+        await handleSession(session);
+      } else if(event==="SIGNED_OUT"){
+        setUser(null);setProfileError(false);setBookings([]);setExpenses([]);setApartments([]);
+      }
     });
     return()=>subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
