@@ -5,7 +5,7 @@ import { fmtEur } from "../../../utils/financeUtils";
 import Modal from "../../shared/Modal";
 import Field, { iS, btnP } from "../../shared/Field";
 
-export default function FinancesSection({ filteredExpenses, filteredBookings, realApts, aptColor, aptLabel, onAddExpense, onUpdateExpense, onDeleteExpense, onToggleExpensePaid }) {
+export default function FinancesSection({ filteredExpenses, filteredBookings, realApts, aptColor, aptLabel, onAddExpense, onUpdateExpense, onDeleteExpense, onToggleExpensePaid, categories }) {
   const now = new Date();
   const [finTab, setFinTab] = useState("mensile");
   const [finMonth, setFinMonth] = useState(now.getMonth());

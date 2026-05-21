@@ -15,7 +15,7 @@ import useSupabaseData from "./hooks/useSupabaseData";
 // ────────────────────────────────────────────
 //  OWNER VIEW
 // ────────────────────────────────────────────
-function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment}) {
+function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment,categories}) {
   const now = new Date();
   const aptColor=(id)=>apartments.find(a=>a.id===id)?.color||"#c9a96e";
   const aptLabel=(id)=>apartments.find(a=>a.id===id)?.label||id;
@@ -266,6 +266,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
             onUpdateExpense={onUpdateExpense}
             onDeleteExpense={onDeleteExpense}
             onToggleExpensePaid={onToggleExpensePaid}
+            categories={categories}
           />
         )}
 
@@ -297,6 +298,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
             onAddApartment={onAddApartment}
             onUpdateApartment={onUpdateApartment}
             onDeleteApartment={onDeleteApartment}
+            categories={categories}
           />
         )}
       </main>
@@ -312,7 +314,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 export default function App() {
   const {
     user, loading, profileError, aptLoadError,
-    bookings, expenses, apartments,
+    bookings, expenses, apartments, categories,
     handleLogout,
     addBooking, updateBooking, deleteBooking,
     toggleCleaning, toggleCheckin, toggleDeposit,
@@ -340,6 +342,7 @@ export default function App() {
       onAddExpense={addExpense} onUpdateExpense={updateExpense} onDeleteExpense={deleteExpense} onToggleExpensePaid={toggleExpensePaid}
       onLogout={handleLogout}
       apartments={apartments} onAddApartment={addApartment} onUpdateApartment={updateApartment} onDeleteApartment={deleteApartment}
+      categories={categories}
     />
   );
 }

@@ -3,7 +3,7 @@ import { COLOR_PALETTE } from "../../../constants";
 import Modal from "../../shared/Modal";
 import Field, { iS, btnP } from "../../shared/Field";
 
-export default function SettingsSection({ realApts, bookings, onAddApartment, onUpdateApartment, onDeleteApartment }) {
+export default function SettingsSection({ realApts, bookings, onAddApartment, onUpdateApartment, onDeleteApartment, categories }) {
   const [aptModal, setAptModal] = useState(null);
   const [aptForm, setAptForm] = useState({ id: "", label: "", color: COLOR_PALETTE[0] });
 

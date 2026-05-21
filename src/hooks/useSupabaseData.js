@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { APT_ALL } from "../constants";
+import { APT_ALL, CATEGORIES } from "../constants";
 import { dbToBooking, bookingToDb } from "../utils/bookingUtils";
 
 export default function useSupabaseData() {
@@ -10,6 +10,7 @@ export default function useSupabaseData() {
   const [bookings, setBookings] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [apartments, setApartments] = useState([]);
+  const [categories, setCategories] = useState(CATEGORIES);
   const [loading, setLoading] = useState(true);
 
   async function handleSession(session) {
@@ -22,10 +23,11 @@ export default function useSupabaseData() {
       setProfileError(true); setLoading(false); return;
     }
     setUser({ id: session.user.id, email: session.user.email, role: profile.role });
-    const [{ data: bData }, { data: eData }, { data: aptData, error: aptErr }] = await Promise.all([
+    const [{ data: bData }, { data: eData }, { data: aptData, error: aptErr }, { data: catData }] = await Promise.all([
       supabase.from("bookings").select("*").order("checkin"),
       supabase.from("expenses").select("*").order("date", { ascending: false }),
       supabase.from("apartments").select("*").eq("active", true).order("label"),
+      supabase.from("expense_categories").select("name").eq("active", true).order("sort_order"),
     ]);
     if (bData) setBookings(bData.map(dbToBooking));
     if (eData) setExpenses(eData);
@@ -36,6 +38,7 @@ export default function useSupabaseData() {
       setAptLoadError(false);
       setApartments(aptData?.length ? [APT_ALL, ...aptData] : [APT_ALL]);
     }
+    if (catData?.length) setCategories(catData.map(r => r.name));
     setLoading(false);
   }
 
@@ -53,7 +56,7 @@ export default function useSupabaseData() {
         await handleSession(session);
       } else if (event === "SIGNED_OUT") {
         setUser(null); setProfileError(false); setAptLoadError(false);
-        setBookings([]); setExpenses([]); setApartments([]);
+        setBookings([]); setExpenses([]); setApartments([]); setCategories(CATEGORIES);
       }
     });
     return () => subscription.unsubscribe();
@@ -163,7 +166,7 @@ export default function useSupabaseData() {
 
   return {
     user, loading, profileError, aptLoadError,
-    bookings, expenses: expensesWithMeta, apartments,
+    bookings, expenses: expensesWithMeta, apartments, categories,
     handleLogout,
     addBooking, updateBooking, deleteBooking,
     toggleCleaning, toggleCheckin, toggleDeposit,
