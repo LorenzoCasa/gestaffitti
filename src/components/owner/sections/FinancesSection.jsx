@@ -12,6 +12,9 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
   const [finQuarter, setFinQuarter] = useState(Math.floor(now.getMonth() / 3));
   const [finYear, setFinYear] = useState(now.getFullYear());
 
+  const [showTax, setShowTax] = useState(() => localStorage.getItem("gestaffitti_showTax") === "true");
+  function toggleTax() { setShowTax(v => { const next = !v; localStorage.setItem("gestaffitti_showTax", String(next)); return next; }); }
+
   const activeCatNames = (() => { const names = categories.filter(c => c.active).map(c => c.name); return names.length > 0 ? names : CATEGORIES; })();
   const emptyExpense = { apt: realApts[0]?.id || "apt1", date: "", category: activeCatNames[0], notes: "", amount: "", paymentType: "Una tantum", paid: false };
   const [showModal, setShowModal] = useState(false);
@@ -169,6 +172,31 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:"0.6rem",color:"#6a5a40",marginBottom:"0.1rem"}}>Da pagare</div>
               <div style={{fontSize:"0.88rem",color:"#c9a96e",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(unpaidPeriodExp)}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Toggle simulazione tasse */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem",padding:"0.55rem 0.8rem",background:"#120f0a",border:"1px solid #2a2010",borderRadius:"10px",cursor:"pointer"}} onClick={toggleTax}>
+          <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+            <span style={{fontSize:"0.9rem"}}>🧾</span>
+            <span style={{fontFamily:"'Playfair Display',serif",color:"#8a7a60",fontSize:"0.8rem"}}>Simulazione tasse</span>
+          </div>
+          <div style={{width:"36px",height:"20px",borderRadius:"10px",background:showTax?"#c9a96e":"#2a2010",border:`1px solid ${showTax?"#c9a96e":"#3a3020"}`,position:"relative",transition:"background 0.2s",flexShrink:0}}>
+            <div style={{width:"14px",height:"14px",borderRadius:"50%",background:showTax?"#0a0806":"#5a4a30",position:"absolute",top:"2px",left:showTax?"19px":"3px",transition:"left 0.2s"}}/>
+          </div>
+        </div>
+
+        {/* Card placeholder simulazione tasse */}
+        {showTax&&(
+          <div style={{background:"rgba(201,169,110,0.05)",border:"1px solid #c9a96e33",borderRadius:"12px",padding:"1rem",marginBottom:"0.9rem"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.6rem"}}>
+              <span style={{fontSize:"1.1rem"}}>🧾</span>
+              <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.95rem"}}>Simulazione fiscale in arrivo</h3>
+            </div>
+            <p style={{color:"#6a5a40",fontSize:"0.75rem",margin:"0 0 0.7rem",lineHeight:1.5}}>Cedolare secca, calcolo IRPEF e stima annuale disponibili nella prossima versione.</p>
+            <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"8px",padding:"0.6rem 0.75rem"}}>
+              <p style={{color:"#4a3a20",fontSize:"0.65rem",margin:0,lineHeight:1.6,fontStyle:"italic"}}>⚠ Questa simulazione è uno strumento gestionale personale. Non sostituisce una consulenza fiscale professionale né una dichiarazione ufficiale.</p>
             </div>
           </div>
         )}
