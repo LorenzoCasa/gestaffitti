@@ -40,6 +40,29 @@ export default function SettingsSection({ realApts, bookings, onAddApartment, on
             </div>
           ))}
         </div>
+
+        <div style={{marginTop:"1rem",background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem"}}>
+          <h3 style={{margin:"0 0 0.8rem",fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.95rem"}}>🏷 Tipologie di spesa</h3>
+          {categories.length===0&&<p style={{color:"#5a4a30",fontSize:"0.82rem",margin:0}}>Nessuna categoria caricata.</p>}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"0.35rem 0.5rem",marginBottom:"0.5rem",padding:"0.3rem 0",borderBottom:"1px solid #1a1510"}}>
+            {["Nome","Tipo","Scope","P/L"].map(h=>(
+              <span key={h} style={{fontSize:"0.6rem",color:"#4a3a20",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:"700"}}>{h}</span>
+            ))}
+          </div>
+          {categories.map((c,i)=>(
+            <div key={c.id??c.name} style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"0.35rem 0.5rem",padding:"0.45rem 0",borderTop:i>0?"1px solid #1a1510":"none",alignItems:"center"}}>
+              <span style={{color:"#e8d5b0",fontSize:"0.8rem",fontWeight:"500"}}>{c.name}</span>
+              <span style={{fontSize:"0.72rem",color:"#8a7a60"}}>{c.type??<span style={{color:"#3a3020"}}>—</span>}</span>
+              <span style={{fontSize:"0.72rem",color:"#8a7a60"}}>{c.scope??<span style={{color:"#3a3020"}}>—</span>}</span>
+              <span style={{fontSize:"0.72rem",color:c.affects_profit===true?"#6ec99a":c.affects_profit===false?"#c96e6e":"#3a3020"}}>{c.affects_profit===true?"Sì":c.affects_profit===false?"No":"—"}</span>
+            </div>
+          ))}
+          <div style={{marginTop:"0.6rem",padding:"0.45rem 0.6rem",background:"#0d0a07",borderRadius:"7px",border:"1px solid #2a2010"}}>
+            <span style={{fontSize:"0.65rem",color:"#4a3a20"}}>Fonte: </span>
+            <span style={{fontSize:"0.65rem",color:categories[0]?.id!==null?"#6ec99a":"#c9a96e"}}>{categories[0]?.id!==null?"Supabase ✓":"Fallback locale ⚠"}</span>
+            <span style={{fontSize:"0.65rem",color:"#4a3a20"}}> · {categories.length} categorie</span>
+          </div>
+        </div>
       </div>
 
       {aptModal&&(
