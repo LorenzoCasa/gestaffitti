@@ -11,6 +11,9 @@ export const COMMISSIONS = { Airbnb: 3, Booking: 15, Subito: 0, Diretto: 0, Altr
 export const CATEGORIES = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Pulizie","Manutenzione","Dotazioni","Assicurazione","Commissioni piattaforma","Altro"];
 export const FIXED_CATS = ["IMU","TARI","Luce","Gas","Acqua","Internet","Condominio","Assicurazione","Commissioni piattaforma"];
 export const MGMT_CATS = ["Pulizie","Manutenzione","Dotazioni","Altro"];
+export const CATEGORIES_FALLBACK = CATEGORIES.map((name, i) => ({
+  id: null, name, type: null, scope: null, affects_profit: null, active: true, sort_order: i + 1,
+}));
 export const PAYMENT_TYPES = ["Una tantum","Rata IMU (2 rate)","Rata Condominio (5 rate)","Mensile"];
 
 export const MONTHS_LONG = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
