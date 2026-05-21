@@ -18,6 +18,15 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
   const [customRate, setCustomRate] = useState(() => localStorage.getItem("gestaffitti_customRate") || "");
   function changeTaxMode(m) { setTaxMode(m); localStorage.setItem("gestaffitti_taxMode", m); }
   function changeCustomRate(v) { setCustomRate(v); localStorage.setItem("gestaffitti_customRate", v); }
+  const [taxOverrides, setTaxOverrides] = useState(() => { try { return JSON.parse(localStorage.getItem("gestaffitti_taxOverrides") || "{}"); } catch { return {}; } });
+  function toggleTaxOverride(id, defaultIncluded) {
+    setTaxOverrides(prev => {
+      const current = id in prev ? prev[id] : defaultIncluded;
+      const next = { ...prev, [id]: !current };
+      localStorage.setItem("gestaffitti_taxOverrides", JSON.stringify(next));
+      return next;
+    });
+  }
 
   const activeCatNames = (() => { const names = categories.filter(c => c.active).map(c => c.name); return names.length > 0 ? names : CATEGORIES; })();
   const emptyExpense = { apt: realApts[0]?.id || "apt1", date: "", category: activeCatNames[0], notes: "", amount: "", paymentType: "Una tantum", paid: false };
@@ -69,8 +78,9 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
 
   // Tax simulation
   const TAX_INCLUDED_PLATFORMS = ["Airbnb", "Booking"];
-  const taxIncluded = periodBookings.filter(b => TAX_INCLUDED_PLATFORMS.includes(b.platform));
-  const taxExcluded = periodBookings.filter(b => !TAX_INCLUDED_PLATFORMS.includes(b.platform));
+  const isBookingIncluded = (b) => b.id in taxOverrides ? taxOverrides[b.id] : TAX_INCLUDED_PLATFORMS.includes(b.platform);
+  const taxIncluded = periodBookings.filter(isBookingIncluded);
+  const taxExcluded = periodBookings.filter(b => !isBookingIncluded(b));
   const taxIncludedRev = taxIncluded.reduce((s, b) => s + Number(b.price), 0);
   const taxExcludedRev = taxExcluded.reduce((s, b) => s + Number(b.price), 0);
   const effectiveRate = taxMode === "custom" ? (parseFloat(customRate) || 0) : parseInt(taxMode);
@@ -227,6 +237,34 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
               )}
             </div>
 
+            {/* Lista prenotazioni con override */}
+            <div style={{marginBottom:"0.7rem"}}>
+              <div style={{fontSize:"0.65rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.35rem"}}>Prenotazioni nel periodo</div>
+              {periodBookings.length===0&&<div style={{fontSize:"0.72rem",color:"#4a3a20",fontStyle:"italic"}}>Nessuna prenotazione nel periodo.</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:"0.3rem"}}>
+                {periodBookings.map(b=>{
+                  const included=isBookingIncluded(b);
+                  const overridden=b.id in taxOverrides;
+                  const platformDefault=TAX_INCLUDED_PLATFORMS.includes(b.platform);
+                  return(
+                    <div key={b.id} style={{display:"flex",alignItems:"center",gap:"0.5rem",padding:"0.45rem 0.6rem",background:"#0d0a07",borderRadius:"7px",border:`1px solid ${included?"#c9a96e33":"#1a1510"}`}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#e8d5b0",fontSize:"0.78rem",fontWeight:"500",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.guest}</div>
+                        <div style={{color:"#6a5a40",fontSize:"0.65rem"}}>{b.platform} · €{b.price}</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:"0.35rem",flexShrink:0}}>
+                        {overridden&&<span style={{fontSize:"0.55rem",color:"#8a7a60",background:"#1a1510",padding:"0.08rem 0.3rem",borderRadius:"3px",border:"1px solid #2a2010"}}>modif.</span>}
+                        <span style={{fontSize:"0.65rem",color:included?"#c9a96e":"#4a3a20",fontWeight:"600",minWidth:"44px",textAlign:"right"}}>{included?"Incluso":"Escluso"}</span>
+                        <div onClick={()=>toggleTaxOverride(b.id,platformDefault)} style={{width:"32px",height:"18px",borderRadius:"9px",background:included?"#c9a96e22":"#1a1510",border:`1px solid ${included?"#c9a96e55":"#2a2010"}`,position:"relative",cursor:"pointer",flexShrink:0}}>
+                          <div style={{width:"12px",height:"12px",borderRadius:"50%",background:included?"#c9a96e":"#3a3020",position:"absolute",top:"2px",left:included?"17px":"3px",transition:"left 0.15s"}}/>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Risultati */}
             <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"9px",padding:"0.65rem 0.8rem",marginBottom:"0.6rem"}}>
               <div style={rowStyle()}>
@@ -234,11 +272,11 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
                 <span style={amtStyle("#e8d5b0")}>€{fmtEur(grossRevenue)}</span>
               </div>
               <div style={rowStyle()}>
-                <span style={labelStyle(true)}>Inclusi ({TAX_INCLUDED_PLATFORMS.join(", ")})</span>
+                <span style={labelStyle(true)}>Inclusi nella simulazione</span>
                 <span style={amtStyle("#c9a96e")}>€{fmtEur(taxIncludedRev)}</span>
               </div>
               <div style={rowStyle()}>
-                <span style={labelStyle(true)}>Esclusi (Diretto / Subito / Altro)</span>
+                <span style={labelStyle(true)}>Esclusi dalla simulazione</span>
                 <span style={amtStyle("#6a5a40")}>€{fmtEur(taxExcludedRev)}</span>
               </div>
               <div style={rowStyle()}>
