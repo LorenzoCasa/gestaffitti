@@ -14,6 +14,10 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
 
   const [showTax, setShowTax] = useState(() => localStorage.getItem("gestaffitti_showTax") === "true");
   function toggleTax() { setShowTax(v => { const next = !v; localStorage.setItem("gestaffitti_showTax", String(next)); return next; }); }
+  const [taxMode, setTaxMode] = useState(() => localStorage.getItem("gestaffitti_taxMode") || "21");
+  const [customRate, setCustomRate] = useState(() => localStorage.getItem("gestaffitti_customRate") || "");
+  function changeTaxMode(m) { setTaxMode(m); localStorage.setItem("gestaffitti_taxMode", m); }
+  function changeCustomRate(v) { setCustomRate(v); localStorage.setItem("gestaffitti_customRate", v); }
 
   const activeCatNames = (() => { const names = categories.filter(c => c.active).map(c => c.name); return names.length > 0 ? names : CATEGORIES; })();
   const emptyExpense = { apt: realApts[0]?.id || "apt1", date: "", category: activeCatNames[0], notes: "", amount: "", paymentType: "Una tantum", paid: false };
@@ -62,6 +66,16 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
   const nettoPrevisto = netRevenue - totalPeriodExp;
   const fixedByCategory = FIXED_CATS.map(cat => ({ cat, amt: fixedExps.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0) })).filter(x => x.amt > 0);
   const mgmtByCategory = MGMT_CATS.map(cat => ({ cat, amt: mgmtExps.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0) })).filter(x => x.amt > 0);
+
+  // Tax simulation
+  const TAX_INCLUDED_PLATFORMS = ["Airbnb", "Booking"];
+  const taxIncluded = periodBookings.filter(b => TAX_INCLUDED_PLATFORMS.includes(b.platform));
+  const taxExcluded = periodBookings.filter(b => !TAX_INCLUDED_PLATFORMS.includes(b.platform));
+  const taxIncludedRev = taxIncluded.reduce((s, b) => s + Number(b.price), 0);
+  const taxExcludedRev = taxExcluded.reduce((s, b) => s + Number(b.price), 0);
+  const effectiveRate = taxMode === "custom" ? (parseFloat(customRate) || 0) : parseInt(taxMode);
+  const estimatedTax = Math.round(taxIncludedRev * effectiveRate) / 100;
+  const netAfterTax = taxIncludedRev - estimatedTax;
 
   const rowStyle = (pad = true) => ({ display: "flex", justifyContent: "space-between", alignItems: "center", padding: pad ? "0.3rem 0" : "0", borderBottom: "1px solid #1a1510" });
   const labelStyle = (sub) => ({ color: sub ? "#6a5a40" : "#c9c0a8", fontSize: sub ? "0.72rem" : "0.82rem", paddingLeft: sub ? "0.9rem" : "0" });
@@ -187,14 +201,57 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
           </div>
         </div>
 
-        {/* Card placeholder simulazione tasse */}
+        {/* Card simulazione tasse */}
         {showTax&&(
           <div style={{background:"rgba(201,169,110,0.05)",border:"1px solid #c9a96e33",borderRadius:"12px",padding:"1rem",marginBottom:"0.9rem"}}>
-            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.6rem"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.8rem"}}>
               <span style={{fontSize:"1.1rem"}}>🧾</span>
-              <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.95rem"}}>Simulazione fiscale in arrivo</h3>
+              <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.95rem"}}>Simulazione fiscale</h3>
             </div>
-            <p style={{color:"#6a5a40",fontSize:"0.75rem",margin:"0 0 0.7rem",lineHeight:1.5}}>Cedolare secca, calcolo IRPEF e stima annuale disponibili nella prossima versione.</p>
+
+            {/* Selettore aliquota */}
+            <div style={{marginBottom:"0.7rem"}}>
+              <div style={{fontSize:"0.65rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.35rem"}}>Aliquota cedolare secca</div>
+              <div style={{display:"flex",gap:"0.25rem",background:"#0d0a07",borderRadius:"8px",padding:"0.2rem",border:"1px solid #2a2010",marginBottom:taxMode==="custom"?"0.45rem":"0"}}>
+                {["21","26","custom"].map(m=>(
+                  <button key={m} onClick={()=>changeTaxMode(m)} style={{flex:1,padding:"0.38rem 0.3rem",borderRadius:"6px",border:"none",cursor:"pointer",background:taxMode===m?"#c9a96e":"transparent",color:taxMode===m?"#0a0806":"#6a5a40",fontFamily:"'Playfair Display',serif",fontSize:"0.72rem",fontWeight:taxMode===m?"700":"400"}}>
+                    {m==="custom"?"Personalizzata":m+"%"}
+                  </button>
+                ))}
+              </div>
+              {taxMode==="custom"&&(
+                <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+                  <input type="number" min="0" max="100" step="0.1" value={customRate} onChange={e=>changeCustomRate(e.target.value)} style={{...iS,flex:1}} placeholder="Es. 23"/>
+                  <span style={{color:"#6a5a40",fontSize:"0.8rem",flexShrink:0}}>%</span>
+                </div>
+              )}
+            </div>
+
+            {/* Risultati */}
+            <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"9px",padding:"0.65rem 0.8rem",marginBottom:"0.6rem"}}>
+              <div style={rowStyle()}>
+                <span style={labelStyle(false)}>Incassi totali periodo</span>
+                <span style={amtStyle("#e8d5b0")}>€{fmtEur(grossRevenue)}</span>
+              </div>
+              <div style={rowStyle()}>
+                <span style={labelStyle(true)}>Inclusi ({TAX_INCLUDED_PLATFORMS.join(", ")})</span>
+                <span style={amtStyle("#c9a96e")}>€{fmtEur(taxIncludedRev)}</span>
+              </div>
+              <div style={rowStyle()}>
+                <span style={labelStyle(true)}>Esclusi (Diretto / Subito / Altro)</span>
+                <span style={amtStyle("#6a5a40")}>€{fmtEur(taxExcludedRev)}</span>
+              </div>
+              <div style={rowStyle()}>
+                <span style={labelStyle(false)}>Imposta stimata ({effectiveRate}%)</span>
+                <span style={amtStyle("#c96e6e")}>−€{fmtEur(estimatedTax)}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.4rem 0",marginTop:"0.1rem",borderTop:"1px solid #3a3020"}}>
+                <span style={{color:"#c9c0a8",fontSize:"0.85rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Netto stimato dopo tasse</span>
+                <span style={{color:netAfterTax>=0?"#6ec99a":"#c96e6e",fontSize:"0.95rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>{netAfterTax>=0?"":"−"}€{fmtEur(Math.abs(netAfterTax))}</span>
+              </div>
+            </div>
+
+            {/* Disclaimer */}
             <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"8px",padding:"0.6rem 0.75rem"}}>
               <p style={{color:"#4a3a20",fontSize:"0.65rem",margin:0,lineHeight:1.6,fontStyle:"italic"}}>⚠ Questa simulazione è uno strumento gestionale personale. Non sostituisce una consulenza fiscale professionale né una dichiarazione ufficiale.</p>
             </div>
