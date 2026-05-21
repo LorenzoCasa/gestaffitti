@@ -12,7 +12,8 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
   const [finQuarter, setFinQuarter] = useState(Math.floor(now.getMonth() / 3));
   const [finYear, setFinYear] = useState(now.getFullYear());
 
-  const emptyExpense = { apt: realApts[0]?.id || "apt1", date: "", category: CATEGORIES[0], notes: "", amount: "", paymentType: "Una tantum", paid: false };
+  const activeCatNames = (() => { const names = categories.filter(c => c.active).map(c => c.name); return names.length > 0 ? names : CATEGORIES; })();
+  const emptyExpense = { apt: realApts[0]?.id || "apt1", date: "", category: activeCatNames[0], notes: "", amount: "", paymentType: "Una tantum", paid: false };
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [eForm, setEForm] = useState(emptyExpense);
@@ -207,7 +208,10 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
         <Modal title={editId?"Modifica Spesa":"Nuova Spesa"} onClose={closeModal}>
           <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
-            <Field label="Categoria"><select value={eForm.category} onChange={e=>setEForm({...eForm,category:e.target.value})} style={iS}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></Field>
+            <Field label="Categoria"><select value={eForm.category} onChange={e=>setEForm({...eForm,category:e.target.value})} style={iS}>
+              {activeCatNames.map(c=><option key={c} value={c}>{c}</option>)}
+              {!activeCatNames.includes(eForm.category)&&eForm.category&&<option value={eForm.category}>{eForm.category} (non attiva)</option>}
+            </select></Field>
             <Field label="Data riferimento"><input type="date" value={eForm.date} onChange={e=>setEForm({...eForm,date:e.target.value})} style={iS}/></Field>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
