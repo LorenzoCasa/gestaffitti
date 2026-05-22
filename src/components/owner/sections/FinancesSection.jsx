@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { CATEGORIES, FIXED_CATS, MGMT_CATS, PAYMENT_TYPES, COMMISSIONS } from "../../../constants";
+import { CATEGORIES, PAYMENT_TYPES } from "../../../constants";
 import { getPeriodBounds, getPeriodLabel, formatDate } from "../../../utils/dateUtils";
-import { fmtEur } from "../../../utils/financeUtils";
+import { fmtEur, calcOperationalMetrics, calcFiscalMetrics, calcFinalMetrics } from "../../../utils/financeUtils";
 import Modal from "../../shared/Modal";
 import Field, { iS, btnP } from "../../shared/Field";
 
@@ -57,35 +57,48 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
     closeModal(); setEForm(emptyExpense);
   }
 
-  // Period calculations
+  // ── Period filters ────────────────────────────────────────────────────────
   const [periodStart, periodEnd] = getPeriodBounds(finTab, finMonth, finQuarter, finYear);
   const periodBookings = filteredBookings.filter(b => b.checkin >= periodStart && b.checkin <= periodEnd);
-  const grossRevenue = periodBookings.reduce((s, b) => s + Number(b.price), 0);
-  const totalCommissions = periodBookings.reduce((s, b) => s + Number(b.price) * (COMMISSIONS[b.platform] || 0) / 100, 0);
-  const netRevenue = grossRevenue - totalCommissions;
   const periodExpenses = filteredExpenses.filter(e => e.date >= periodStart && e.date <= periodEnd);
-  const fixedExps = periodExpenses.filter(e => FIXED_CATS.includes(e.category));
-  const mgmtExps = periodExpenses.filter(e => MGMT_CATS.includes(e.category));
-  const fixedTotal = fixedExps.reduce((s, e) => s + Number(e.amount), 0);
-  const mgmtTotal = mgmtExps.reduce((s, e) => s + Number(e.amount), 0);
-  const totalPeriodExp = fixedTotal + mgmtTotal;
-  const paidPeriodExp = periodExpenses.filter(e => e.paid).reduce((s, e) => s + Number(e.amount), 0);
-  const unpaidPeriodExp = periodExpenses.filter(e => !e.paid).reduce((s, e) => s + Number(e.amount), 0);
-  const nettoReale = netRevenue - paidPeriodExp;
-  const nettoPrevisto = netRevenue - totalPeriodExp;
-  const fixedByCategory = FIXED_CATS.map(cat => ({ cat, amt: fixedExps.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0) })).filter(x => x.amt > 0);
-  const mgmtByCategory = MGMT_CATS.map(cat => ({ cat, amt: mgmtExps.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0) })).filter(x => x.amt > 0);
 
-  // Tax simulation
+  // ── Financial engine (Sprint 1.1) ─────────────────────────────────────────
+  const operational = calcOperationalMetrics(periodBookings, periodExpenses, categories);
+  const fiscal      = calcFiscalMetrics(periodBookings, periodExpenses, { taxMode, customRate, taxOverrides }, categories);
+  const final       = calcFinalMetrics(operational, fiscal, showTax);
+
+  // ── UI aliases — map engine output to the names used in JSX below ─────────
+  const grossRevenue     = operational.grossRevenue;
+  const totalCommissions = operational.platformCommissions;
+  const netRevenue       = operational.netRevenue;
+  const fixedTotal       = operational.fixedTotal;
+  const mgmtTotal        = operational.variableTotal;
+  const fixedByCategory  = operational.fixedByCategory;
+  const mgmtByCategory   = operational.variableByCategory;
+  const totalPeriodExp   = operational.operationalExpenses;
+
+  const taxIncludedRev = fiscal.taxableRevenue;
+  const taxExcludedRev = fiscal.excludedRevenue;
+  const effectiveRate  = fiscal.effectiveRate;
+  const estimatedTax   = fiscal.estimatedTax;
+
+  // final.finalNet = operationalMargin − taxDueEstimate − fiscalCosts (IMU/TARI)
+  const netAfterTax = final.finalNet;
+
+  // ── Cash-flow metrics: paid/unpaid across ALL period expenses ─────────────
+  // These intentionally include fiscal costs (IMU/TARI) — they represent
+  // real cash movements, not the operational P&L.
+  const paidPeriodExp   = periodExpenses.filter(e => e.paid).reduce((s, e) => s + Number(e.amount), 0);
+  const unpaidPeriodExp = periodExpenses.filter(e => !e.paid).reduce((s, e) => s + Number(e.amount), 0);
+
+  // nettoPrevisto = operational margin (excludes fiscal costs → Block B)
+  // nettoReale    = cash-based net (netRevenue minus all paid expenses incl. fiscal)
+  const nettoPrevisto = operational.operationalMargin;
+  const nettoReale    = netRevenue - paidPeriodExp;
+
+  // ── Tax UI helper: per-booking toggle rendering (mirrors engine logic) ────
   const TAX_INCLUDED_PLATFORMS = ["Airbnb", "Booking"];
   const isBookingIncluded = (b) => b.id in taxOverrides ? taxOverrides[b.id] : TAX_INCLUDED_PLATFORMS.includes(b.platform);
-  const taxIncluded = periodBookings.filter(isBookingIncluded);
-  const taxExcluded = periodBookings.filter(b => !isBookingIncluded(b));
-  const taxIncludedRev = taxIncluded.reduce((s, b) => s + Number(b.price), 0);
-  const taxExcludedRev = taxExcluded.reduce((s, b) => s + Number(b.price), 0);
-  const effectiveRate = taxMode === "custom" ? (parseFloat(customRate) || 0) : parseInt(taxMode);
-  const estimatedTax = Math.round(taxIncludedRev * effectiveRate) / 100;
-  const netAfterTax = taxIncludedRev - estimatedTax;
 
   const rowStyle = (pad = true) => ({ display: "flex", justifyContent: "space-between", alignItems: "center", padding: pad ? "0.3rem 0" : "0", borderBottom: "1px solid #1a1510" });
   const labelStyle = (sub) => ({ color: sub ? "#6a5a40" : "#c9c0a8", fontSize: sub ? "0.72rem" : "0.82rem", paddingLeft: sub ? "0.9rem" : "0" });
