@@ -17,8 +17,8 @@ import useSupabaseData from "./hooks/useSupabaseData";
 // ────────────────────────────────────────────
 function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment,categories}) {
   const now = new Date();
-  const aptColor=(id)=>apartments.find(a=>a.id===id)?.color||"#c9a96e";
-  const aptLabel=(id)=>apartments.find(a=>a.id===id)?.label||id;
+  const aptColor=(id)=>{ if(id==="property") return "#8a7a60"; return apartments.find(a=>a.id===id)?.color||"#c9a96e"; };
+  const aptLabel=(id)=>{ if(id==="property") return "Immobile / Comune"; return apartments.find(a=>a.id===id)?.label||id; };
   const realApts=apartments.filter(a=>a.id!=="all");
 
   const [activeFilter,setActiveFilter]=useState("all");

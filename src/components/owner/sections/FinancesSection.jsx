@@ -342,7 +342,7 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
       {/* Modal Spesa */}
       {showModal&&(
         <Modal title={editId?"Modifica Spesa":"Nuova Spesa"} onClose={closeModal}>
-          <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
+          <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}><option value="property">🏛 Immobile / Comune</option>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
             <Field label="Categoria"><select value={eForm.category} onChange={e=>setEForm({...eForm,category:e.target.value})} style={iS}>
               {activeCatNames.map(c=><option key={c} value={c}>{c}</option>)}
