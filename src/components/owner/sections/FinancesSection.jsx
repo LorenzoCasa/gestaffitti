@@ -62,54 +62,44 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
   const periodBookings = filteredBookings.filter(b => b.checkin >= periodStart && b.checkin <= periodEnd);
   const periodExpenses = filteredExpenses.filter(e => e.date >= periodStart && e.date <= periodEnd);
 
-  // ── Financial engine (Sprint 1.1) ─────────────────────────────────────────
+  // ── Financial engine ──────────────────────────────────────────────────────
   const operational = calcOperationalMetrics(periodBookings, periodExpenses, categories);
   const fiscal      = calcFiscalMetrics(periodBookings, periodExpenses, { taxMode, customRate, taxOverrides }, categories);
   const final       = calcFinalMetrics(operational, fiscal, showTax);
 
-  // ── UI aliases — map engine output to the names used in JSX below ─────────
+  // ── UI aliases ────────────────────────────────────────────────────────────
   const grossRevenue     = operational.grossRevenue;
   const totalCommissions = operational.platformCommissions;
   const netRevenue       = operational.netRevenue;
-  const fixedTotal       = operational.fixedTotal;
-  const mgmtTotal        = operational.variableTotal;
   const fixedByCategory  = operational.fixedByCategory;
   const mgmtByCategory   = operational.variableByCategory;
-  const totalPeriodExp   = operational.operationalExpenses;
+  const taxIncludedRev   = fiscal.taxableRevenue;
+  const taxExcludedRev   = fiscal.excludedRevenue;
+  const effectiveRate    = fiscal.effectiveRate;
+  const estimatedTax     = fiscal.estimatedTax;
 
-  const taxIncludedRev = fiscal.taxableRevenue;
-  const taxExcludedRev = fiscal.excludedRevenue;
-  const effectiveRate  = fiscal.effectiveRate;
-  const estimatedTax   = fiscal.estimatedTax;
-
-  // final.finalNet = operationalMargin − taxDueEstimate − fiscalCosts (IMU/TARI)
-  const netAfterTax = final.finalNet;
-
-  // ── Cash-flow metrics: paid/unpaid across ALL period expenses ─────────────
-  // These intentionally include fiscal costs (IMU/TARI) — they represent
-  // real cash movements, not the operational P&L.
+  // ── Cash-flow metrics (all period expenses, incl. fiscal) ─────────────────
   const paidPeriodExp   = periodExpenses.filter(e => e.paid).reduce((s, e) => s + Number(e.amount), 0);
   const unpaidPeriodExp = periodExpenses.filter(e => !e.paid).reduce((s, e) => s + Number(e.amount), 0);
 
-  // nettoPrevisto = operational margin (excludes fiscal costs → Block B)
-  // nettoReale    = cash-based net (netRevenue minus all paid expenses incl. fiscal)
-  const nettoPrevisto = operational.operationalMargin;
-  const nettoReale    = netRevenue - paidPeriodExp;
-
-  // ── Tax UI helper: per-booking toggle rendering (mirrors engine logic) ────
+  // ── Tax UI helper ─────────────────────────────────────────────────────────
   const TAX_INCLUDED_PLATFORMS = ["Airbnb", "Booking"];
   const isBookingIncluded = (b) => b.id in taxOverrides ? taxOverrides[b.id] : TAX_INCLUDED_PLATFORMS.includes(b.platform);
 
-  const rowStyle = (pad = true) => ({ display: "flex", justifyContent: "space-between", alignItems: "center", padding: pad ? "0.3rem 0" : "0", borderBottom: "1px solid #1a1510" });
-  const labelStyle = (sub) => ({ color: sub ? "#6a5a40" : "#c9c0a8", fontSize: sub ? "0.72rem" : "0.82rem", paddingLeft: sub ? "0.9rem" : "0" });
-  const amtStyle = (color) => ({ color: color || "#e8d5b0", fontFamily: "'Playfair Display',serif", fontSize: "0.82rem", fontWeight: "600" });
+  // ── Style helpers ─────────────────────────────────────────────────────────
+  const row  = (border = true) => ({ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0.28rem 0", ...(border ? { borderBottom:"1px solid #1a1510" } : {}) });
+  const lbl  = (sub) => ({ color: sub ? "#6a5a40" : "#c9c0a8", fontSize: sub ? "0.72rem" : "0.8rem", paddingLeft: sub ? "0.85rem" : "0" });
+  const amt  = (color) => ({ color: color || "#e8d5b0", fontFamily:"'Playfair Display',serif", fontSize:"0.8rem", fontWeight:"600" });
+  const secH = { fontSize:"0.57rem", color:"#4a3a20", textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:"700", marginBottom:"0.22rem" };
+  const card = { background:"#120f0a", border:"1px solid #2a2010", borderRadius:"12px", padding:"0.9rem", marginBottom:"0.6rem" };
+  const subCard = { background:"#0d0a07", border:"1px solid #2a2010", borderRadius:"9px", padding:"0.6rem 0.75rem", marginBottom:"0.5rem" };
 
   return (
     <>
       <div>
         <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.2rem",marginBottom:"0.9rem",marginTop:"0.4rem"}}>Finanze</h2>
 
-        {/* Tab selector */}
+        {/* ── Tab selector ─────────────────────────────────────────────── */}
         <div style={{display:"flex",gap:"0.25rem",marginBottom:"0.9rem",background:"#120f0a",borderRadius:"10px",padding:"0.22rem",border:"1px solid #2a2010"}}>
           {["mensile","trimestrale","annuale"].map(t=>(
             <button key={t} onClick={()=>setFinTab(t)} style={{flex:1,padding:"0.42rem 0.3rem",borderRadius:"7px",border:"none",cursor:"pointer",background:finTab===t?"#c9a96e":"transparent",color:finTab===t?"#0a0806":"#6a5a40",fontFamily:"'Playfair Display',serif",fontSize:"0.72rem",fontWeight:finTab===t?"700":"400",textTransform:"capitalize"}}>
@@ -118,102 +108,91 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
           ))}
         </div>
 
-        {/* Period navigation */}
+        {/* ── Period navigation ─────────────────────────────────────────── */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.9rem"}}>
           <button onClick={prevPeriod} style={{background:"#1a1612",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.42rem 0.9rem",color:"#c9a96e",cursor:"pointer",fontSize:"1.1rem",lineHeight:1,fontWeight:"bold"}}>‹</button>
           <span style={{fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"1rem"}}>{getPeriodLabel(finTab,finMonth,finQuarter,finYear)}</span>
           <button onClick={nextPeriod} style={{background:"#1a1612",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.42rem 0.9rem",color:"#c9a96e",cursor:"pointer",fontSize:"1.1rem",lineHeight:1,fontWeight:"bold"}}>›</button>
         </div>
 
-        {/* Revenue card */}
-        <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem",marginBottom:"0.6rem"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginBottom:"0.65rem"}}>
+        {/* ══════════════════════════════════════════════════════════════════
+            BLOCCO A — Conto Economico Operativo
+        ══════════════════════════════════════════════════════════════════ */}
+        <div style={card}>
+          <div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginBottom:"0.75rem"}}>
             <span style={{fontSize:"0.9rem"}}>💶</span>
-            <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.88rem"}}>Entrate</h3>
+            <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.88rem"}}>Conto Economico Operativo</h3>
             <span style={{fontSize:"0.62rem",color:"#4a3a20",marginLeft:"auto"}}>{periodBookings.length} prenotaz.</span>
           </div>
-          <div style={rowStyle()}>
-            <span style={labelStyle(false)}>Entrate lorde</span>
-            <span style={amtStyle("#6ec99a")}>€{fmtEur(grossRevenue)}</span>
-          </div>
-          {totalCommissions>0&&(
-            <div style={rowStyle()}>
-              <span style={labelStyle(false)}>Commissioni piattaforme</span>
-              <span style={amtStyle("#c96e6e")}>−€{fmtEur(totalCommissions)}</span>
+
+          {/* RICAVI */}
+          <div style={{marginBottom:"0.55rem"}}>
+            <div style={secH}>Ricavi</div>
+            <div style={row()}>
+              <span style={lbl(false)}>Incassi lordi</span>
+              <span style={amt("#6ec99a")}>+€{fmtEur(grossRevenue)}</span>
             </div>
-          )}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.4rem 0",marginTop:"0.15rem",borderTop:"1px solid #3a3020"}}>
-            <span style={{color:"#c9c0a8",fontSize:"0.85rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Entrate nette</span>
-            <span style={{color:"#6ec99a",fontSize:"0.95rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(netRevenue)}</span>
+            {totalCommissions>0&&(
+              <div style={row()}>
+                <span style={lbl(true)}>Commissioni piattaforme</span>
+                <span style={amt("#c96e6e")}>−€{fmtEur(totalCommissions)}</span>
+              </div>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.3rem 0",borderBottom:"1px solid #2a2010"}}>
+              <span style={{color:"#c9c0a8",fontSize:"0.8rem",fontWeight:"600"}}>Ricavi netti</span>
+              <span style={{color:"#6ec99a",fontFamily:"'Playfair Display',serif",fontSize:"0.84rem",fontWeight:"700"}}>€{fmtEur(netRevenue)}</span>
+            </div>
+          </div>
+
+          {/* COSTI VARIABILI */}
+          <div style={{marginBottom:"0.55rem",marginTop:"0.45rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.22rem"}}>
+              <div style={secH}>Costi Variabili</div>
+              <span style={{fontSize:"0.7rem",color:"#c96e6e",fontFamily:"'Playfair Display',serif",fontWeight:"600"}}>−€{fmtEur(operational.variableTotal)}</span>
+            </div>
+            {mgmtByCategory.map(({cat,amt:a})=>(
+              <div key={cat} style={row()}>
+                <span style={lbl(true)}>{cat}</span>
+                <span style={amt("#8a7a60")}>€{fmtEur(a)}</span>
+              </div>
+            ))}
+            {mgmtByCategory.length===0&&<div style={{color:"#3a3020",fontSize:"0.67rem",padding:"0.12rem 0 0.12rem 0.85rem",fontStyle:"italic"}}>Nessuna nel periodo</div>}
+          </div>
+
+          {/* COSTI FISSI STRUTTURALI */}
+          <div style={{marginBottom:"0.65rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.22rem"}}>
+              <div style={secH}>Costi Fissi Strutturali</div>
+              <span style={{fontSize:"0.7rem",color:"#c96e6e",fontFamily:"'Playfair Display',serif",fontWeight:"600"}}>−€{fmtEur(operational.fixedTotal)}</span>
+            </div>
+            {fixedByCategory.map(({cat,amt:a})=>(
+              <div key={cat} style={row()}>
+                <span style={lbl(true)}>{cat}</span>
+                <span style={amt("#8a7a60")}>€{fmtEur(a)}</span>
+              </div>
+            ))}
+            {fixedByCategory.length===0&&<div style={{color:"#3a3020",fontSize:"0.67rem",padding:"0.12rem 0 0.12rem 0.85rem",fontStyle:"italic"}}>Nessuna nel periodo</div>}
+          </div>
+
+          {/* MARGINE OPERATIVO */}
+          <div style={{background:operational.operationalMargin>=0?"rgba(110,201,154,0.07)":"rgba(201,110,110,0.07)",border:`1px solid ${operational.operationalMargin>=0?"#6ec99a30":"#c96e6e30"}`,borderRadius:"8px",padding:"0.6rem 0.75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:"0.57rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.06rem"}}>Margine Operativo</div>
+              {netRevenue>0&&(
+                <div style={{fontSize:"0.6rem",fontWeight:"600",color:operational.operationalMarginPct>=40?"#6ec99a":operational.operationalMarginPct>=20?"#c9a96e":"#c96e6e"}}>
+                  {operational.operationalMarginPct}% sui ricavi netti
+                </div>
+              )}
+            </div>
+            <div style={{fontSize:"1.15rem",fontWeight:"700",fontFamily:"'Playfair Display',serif",color:operational.operationalMargin>=0?"#6ec99a":"#c96e6e"}}>
+              {operational.operationalMargin>=0?"":"−"}€{fmtEur(Math.abs(operational.operationalMargin))}
+            </div>
           </div>
         </div>
 
-        {/* Expenses card */}
-        <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem",marginBottom:"0.6rem"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginBottom:"0.65rem"}}>
-            <span style={{fontSize:"0.9rem"}}>📤</span>
-            <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.88rem"}}>Spese</h3>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.3rem 0",borderBottom:"1px solid #2a2010"}}>
-            <span style={{color:"#c9c0a8",fontSize:"0.8rem",fontWeight:"600"}}>🏛 Spese fisse</span>
-            <span style={{color:"#c96e6e",fontFamily:"'Playfair Display',serif",fontSize:"0.82rem",fontWeight:"600"}}>€{fmtEur(fixedTotal)}</span>
-          </div>
-          {fixedByCategory.map(({cat,amt})=>(
-            <div key={cat} style={rowStyle()}>
-              <span style={labelStyle(true)}>{cat}</span>
-              <span style={amtStyle("#8a7a60")}>€{fmtEur(amt)}</span>
-            </div>
-          ))}
-          {fixedByCategory.length===0&&<div style={{color:"#4a3a20",fontSize:"0.72rem",paddingLeft:"0.9rem",padding:"0.2rem 0 0.2rem 0.9rem",fontStyle:"italic"}}>Nessuna</div>}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.3rem 0",borderBottom:"1px solid #2a2010",marginTop:"0.4rem"}}>
-            <span style={{color:"#c9c0a8",fontSize:"0.8rem",fontWeight:"600"}}>🔧 Spese gestione</span>
-            <span style={{color:"#c96e6e",fontFamily:"'Playfair Display',serif",fontSize:"0.82rem",fontWeight:"600"}}>€{fmtEur(mgmtTotal)}</span>
-          </div>
-          {mgmtByCategory.map(({cat,amt})=>(
-            <div key={cat} style={rowStyle()}>
-              <span style={labelStyle(true)}>{cat}</span>
-              <span style={amtStyle("#8a7a60")}>€{fmtEur(amt)}</span>
-            </div>
-          ))}
-          {mgmtByCategory.length===0&&<div style={{color:"#4a3a20",fontSize:"0.72rem",padding:"0.2rem 0 0.2rem 0.9rem",fontStyle:"italic"}}>Nessuna</div>}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.4rem 0",marginTop:"0.15rem",borderTop:"1px solid #3a3020"}}>
-            <span style={{color:"#c9c0a8",fontSize:"0.85rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Totale spese</span>
-            <span style={{color:"#c96e6e",fontSize:"0.95rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(totalPeriodExp)}</span>
-          </div>
-        </div>
-
-        {/* Netto reale / previsto */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginBottom:"0.6rem"}}>
-          <div style={{background:nettoReale>=0?"rgba(110,201,154,0.06)":"rgba(201,110,110,0.06)",border:`1px solid ${nettoReale>=0?"#6ec99a33":"#c96e6e33"}`,borderRadius:"12px",padding:"0.85rem",textAlign:"center"}}>
-            <div style={{fontSize:"0.6rem",color:"#6a5a40",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:"0.25rem"}}>Netto Reale</div>
-            <div style={{fontSize:"1.3rem",fontWeight:"700",color:nettoReale>=0?"#6ec99a":"#c96e6e",fontFamily:"'Playfair Display',serif"}}>
-              {nettoReale>=0?"":"−"}€{fmtEur(Math.abs(nettoReale))}
-            </div>
-            <div style={{fontSize:"0.58rem",color:"#4a3a20",marginTop:"0.15rem"}}>solo spese pagate</div>
-          </div>
-          <div style={{background:nettoPrevisto>=0?"rgba(110,201,154,0.04)":"rgba(201,110,110,0.04)",border:`1px solid ${nettoPrevisto>=0?"#6ec99a22":"#c96e6e22"}`,borderRadius:"12px",padding:"0.85rem",textAlign:"center"}}>
-            <div style={{fontSize:"0.6rem",color:"#6a5a40",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:"0.25rem"}}>Netto Previsto</div>
-            <div style={{fontSize:"1.3rem",fontWeight:"700",color:nettoPrevisto>=0?"#6ec99a":"#c96e6e",fontFamily:"'Playfair Display',serif"}}>
-              {nettoPrevisto>=0?"":"−"}€{fmtEur(Math.abs(nettoPrevisto))}
-            </div>
-            <div style={{fontSize:"0.58rem",color:"#4a3a20",marginTop:"0.15rem"}}>tutte le spese</div>
-          </div>
-        </div>
-        {(paidPeriodExp>0||unpaidPeriodExp>0)&&(
-          <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"10px",padding:"0.65rem 0.85rem",marginBottom:"0.9rem",display:"flex",gap:"1.2rem",justifyContent:"center"}}>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:"0.6rem",color:"#6a5a40",marginBottom:"0.1rem"}}>Pagate</div>
-              <div style={{fontSize:"0.88rem",color:"#6ec99a",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(paidPeriodExp)}</div>
-            </div>
-            <div style={{width:"1px",background:"#2a2010"}}/>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:"0.6rem",color:"#6a5a40",marginBottom:"0.1rem"}}>Da pagare</div>
-              <div style={{fontSize:"0.88rem",color:"#c9a96e",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(unpaidPeriodExp)}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Toggle simulazione tasse */}
+        {/* ══════════════════════════════════════════════════════════════════
+            BLOCCO B — Simulazione Fiscale (toggle collapsible)
+        ══════════════════════════════════════════════════════════════════ */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem",padding:"0.55rem 0.8rem",background:"#120f0a",border:"1px solid #2a2010",borderRadius:"10px",cursor:"pointer"}} onClick={toggleTax}>
           <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
             <span style={{fontSize:"0.9rem"}}>🧾</span>
@@ -224,7 +203,6 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
           </div>
         </div>
 
-        {/* Card simulazione tasse */}
         {showTax&&(
           <div style={{background:"rgba(201,169,110,0.05)",border:"1px solid #c9a96e33",borderRadius:"12px",padding:"1rem",marginBottom:"0.9rem"}}>
             <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.8rem"}}>
@@ -232,7 +210,7 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
               <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.95rem"}}>Simulazione fiscale</h3>
             </div>
 
-            {/* Selettore aliquota */}
+            {/* Selettore aliquota — invariato */}
             <div style={{marginBottom:"0.7rem"}}>
               <div style={{fontSize:"0.65rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.35rem"}}>Aliquota cedolare secca</div>
               <div style={{display:"flex",gap:"0.25rem",background:"#0d0a07",borderRadius:"8px",padding:"0.2rem",border:"1px solid #2a2010",marginBottom:taxMode==="custom"?"0.45rem":"0"}}>
@@ -250,7 +228,7 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
               )}
             </div>
 
-            {/* Lista prenotazioni con override */}
+            {/* Lista prenotazioni con override — invariata */}
             <div style={{marginBottom:"0.7rem"}}>
               <div style={{fontSize:"0.65rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.35rem"}}>Prenotazioni nel periodo</div>
               {periodBookings.length===0&&<div style={{fontSize:"0.72rem",color:"#4a3a20",fontStyle:"italic"}}>Nessuna prenotazione nel periodo.</div>}
@@ -278,29 +256,62 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
               </div>
             </div>
 
-            {/* Risultati */}
-            <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"9px",padding:"0.65rem 0.8rem",marginBottom:"0.6rem"}}>
-              <div style={rowStyle()}>
-                <span style={labelStyle(false)}>Incassi totali periodo</span>
-                <span style={amtStyle("#e8d5b0")}>€{fmtEur(grossRevenue)}</span>
+            {/* Cedolare secca — risultati */}
+            <div style={subCard}>
+              <div style={{...secH,marginBottom:"0.35rem"}}>Cedolare Secca</div>
+              <div style={row()}>
+                <span style={lbl(false)}>Incassi totali periodo</span>
+                <span style={amt("#e8d5b0")}>€{fmtEur(grossRevenue)}</span>
               </div>
-              <div style={rowStyle()}>
-                <span style={labelStyle(true)}>Inclusi nella simulazione</span>
-                <span style={amtStyle("#c9a96e")}>€{fmtEur(taxIncludedRev)}</span>
+              <div style={row()}>
+                <span style={lbl(true)}>di cui soggetti a cedolare</span>
+                <span style={amt("#c9a96e")}>€{fmtEur(taxIncludedRev)}</span>
               </div>
-              <div style={rowStyle()}>
-                <span style={labelStyle(true)}>Esclusi dalla simulazione</span>
-                <span style={amtStyle("#6a5a40")}>€{fmtEur(taxExcludedRev)}</span>
+              <div style={row()}>
+                <span style={lbl(true)}>di cui esclusi</span>
+                <span style={amt("#6a5a40")}>€{fmtEur(taxExcludedRev)}</span>
               </div>
-              <div style={rowStyle()}>
-                <span style={labelStyle(false)}>Imposta stimata ({effectiveRate}%)</span>
-                <span style={amtStyle("#c96e6e")}>−€{fmtEur(estimatedTax)}</span>
+              <div style={row()}>
+                <span style={lbl(false)}>Imposta stimata ({effectiveRate}%)</span>
+                <span style={amt("#c96e6e")}>−€{fmtEur(estimatedTax)}</span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.4rem 0",marginTop:"0.1rem",borderTop:"1px solid #3a3020"}}>
-                <span style={{color:"#c9c0a8",fontSize:"0.85rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Netto stimato dopo tasse</span>
-                <span style={{color:netAfterTax>=0?"#6ec99a":"#c96e6e",fontSize:"0.95rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>{netAfterTax>=0?"":"−"}€{fmtEur(Math.abs(netAfterTax))}</span>
+              {fiscal.withheldTax>0&&(
+                <div style={row()}>
+                  <span style={{...lbl(true),display:"flex",alignItems:"center",gap:"0.3rem"}}>
+                    Ritenuta già trattenuta
+                    <span style={{fontSize:"0.54rem",color:"#6a5a40",background:"#1a1510",padding:"0.05rem 0.26rem",borderRadius:"3px",border:"1px solid #2a2010"}}>Airbnb</span>
+                  </span>
+                  <span style={amt("#8a7a60")}>−€{fmtEur(fiscal.withheldTax)}</span>
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.35rem 0",marginTop:"0.08rem",borderTop:"1px solid #3a3020"}}>
+                <span style={{color:"#c9c0a8",fontSize:"0.8rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Residuo da versare</span>
+                <span style={{color:fiscal.taxDueEstimate>0?"#c96e6e":"#6ec99a",fontSize:"0.9rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>
+                  {fiscal.taxDueEstimate>0?"−":""}€{fmtEur(fiscal.taxDueEstimate)}
+                </span>
               </div>
             </div>
+
+            {/* Imposte patrimoniali — IMU / TARI */}
+            {fiscal.fiscalExpensesTotal>0&&(
+              <div style={subCard}>
+                <div style={{...secH,marginBottom:"0.35rem"}}>Imposte Patrimoniali</div>
+                {fiscal.fiscalExpensesByCategory.map(({cat,amt:a})=>(
+                  <div key={cat} style={row()}>
+                    <span style={lbl(false)}>{cat}</span>
+                    <span style={amt("#c96e6e")}>−€{fmtEur(a)}</span>
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.35rem 0",marginTop:"0.08rem",borderTop:"1px solid #3a3020"}}>
+                  <span style={{color:"#c9c0a8",fontSize:"0.8rem",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>Totale patrimoniali</span>
+                  <span style={{color:"#c96e6e",fontSize:"0.88rem",fontWeight:"700",fontFamily:"'Playfair Display',serif"}}>−€{fmtEur(fiscal.fiscalExpensesTotal)}</span>
+                </div>
+                <div style={{display:"flex",gap:"1rem",marginTop:"0.22rem",paddingTop:"0.22rem",borderTop:"1px solid #1a1510"}}>
+                  {fiscal.fiscalExpensesPaid>0&&<span style={{fontSize:"0.62rem",color:"#6ec99a"}}>✓ Pagate: €{fmtEur(fiscal.fiscalExpensesPaid)}</span>}
+                  {fiscal.fiscalExpensesUnpaid>0&&<span style={{fontSize:"0.62rem",color:"#c9a96e"}}>⏳ Da pagare: €{fmtEur(fiscal.fiscalExpensesUnpaid)}</span>}
+                </div>
+              </div>
+            )}
 
             {/* Disclaimer */}
             <div style={{background:"#0d0a07",border:"1px solid #2a2010",borderRadius:"8px",padding:"0.6rem 0.75rem"}}>
@@ -309,7 +320,66 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
           </div>
         )}
 
-        {/* Registro Spese */}
+        {/* ══════════════════════════════════════════════════════════════════
+            BLOCCO C — Risultato Finale
+        ══════════════════════════════════════════════════════════════════ */}
+        <div style={{...card,marginBottom:"0.9rem"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginBottom:"0.75rem"}}>
+            <span style={{fontSize:"0.9rem"}}>📊</span>
+            <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.88rem"}}>Risultato Finale</h3>
+          </div>
+
+          <div style={row()}>
+            <span style={lbl(false)}>Margine operativo</span>
+            <span style={amt(operational.operationalMargin>=0?"#6ec99a":"#c96e6e")}>
+              {operational.operationalMargin>=0?"":"−"}€{fmtEur(Math.abs(operational.operationalMargin))}
+            </span>
+          </div>
+          {showTax&&fiscal.taxDueEstimate>0&&(
+            <div style={row()}>
+              <span style={lbl(true)}>Residuo cedolare ({effectiveRate}%)</span>
+              <span style={amt("#c96e6e")}>−€{fmtEur(fiscal.taxDueEstimate)}</span>
+            </div>
+          )}
+          {showTax&&final.fiscalCosts>0&&(
+            <div style={row()}>
+              <span style={lbl(true)}>IMU + TARI</span>
+              <span style={amt("#c96e6e")}>−€{fmtEur(final.fiscalCosts)}</span>
+            </div>
+          )}
+
+          {/* Bottom line */}
+          <div style={{background:final.finalNet>=0?"rgba(110,201,154,0.07)":"rgba(201,110,110,0.07)",border:`1px solid ${final.finalNet>=0?"#6ec99a30":"#c96e6e30"}`,borderRadius:"8px",padding:"0.6rem 0.75rem",marginTop:"0.4rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:"0.57rem",color:"#6a5a40",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.06rem"}}>
+                {showTax?"Utile Netto Stimato":"Margine Operativo"}
+              </div>
+              <div style={{fontSize:"0.58rem",color:"#4a3a20"}}>
+                {showTax?"dopo tasse e costi fiscali":"al lordo di tasse e fiscali"}
+              </div>
+            </div>
+            <div style={{fontSize:"1.2rem",fontWeight:"700",fontFamily:"'Playfair Display',serif",color:final.finalNet>=0?"#6ec99a":"#c96e6e"}}>
+              {final.finalNet>=0?"":"−"}€{fmtEur(Math.abs(final.finalNet))}
+            </div>
+          </div>
+
+          {/* Strip liquidità */}
+          {(paidPeriodExp>0||unpaidPeriodExp>0)&&(
+            <div style={{display:"flex",gap:"1.2rem",justifyContent:"center",marginTop:"0.65rem",paddingTop:"0.5rem",borderTop:"1px solid #1a1510"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:"0.57rem",color:"#4a3a20",marginBottom:"0.1rem",textTransform:"uppercase",letterSpacing:"0.07em"}}>Spese Pagate</div>
+                <div style={{fontSize:"0.85rem",color:"#6ec99a",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(paidPeriodExp)}</div>
+              </div>
+              <div style={{width:"1px",background:"#2a2010"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:"0.57rem",color:"#4a3a20",marginBottom:"0.1rem",textTransform:"uppercase",letterSpacing:"0.07em"}}>Da Pagare</div>
+                <div style={{fontSize:"0.85rem",color:"#c9a96e",fontWeight:"600",fontFamily:"'Playfair Display',serif"}}>€{fmtEur(unpaidPeriodExp)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Registro Spese — invariato ────────────────────────────────── */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.6rem"}}>
           <h3 style={{margin:0,fontFamily:"'Playfair Display',serif",color:"#8a7a60",fontSize:"0.88rem"}}>Registro Spese</h3>
           <button onClick={()=>{if(realApts.length===0){alert("Nessun appartamento configurato. Aggiungine uno in Impostazioni.");return;}setEForm(emptyExpense);setEditId(null);setShowModal(true);}} style={btnP}>+ Spesa</button>
@@ -339,7 +409,7 @@ export default function FinancesSection({ filteredExpenses, filteredBookings, re
         </div>
       </div>
 
-      {/* Modal Spesa */}
+      {/* ── Modal Spesa — invariato ───────────────────────────────────────── */}
       {showModal&&(
         <Modal title={editId?"Modifica Spesa":"Nuova Spesa"} onClose={closeModal}>
           <Field label="Appartamento"><select value={eForm.apt} onChange={e=>setEForm({...eForm,apt:e.target.value})} style={iS}><option value="property">🏛 Immobile / Comune</option>{realApts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></Field>
