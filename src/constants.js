@@ -18,3 +18,48 @@ export const PAYMENT_TYPES = ["Una tantum","Rata IMU (2 rate)","Rata Condominio 
 
 export const MONTHS_LONG = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 export const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Agent — multi-source inbox constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** All supported inbound sources for the agent inbox. */
+export const AGENT_SOURCES = ["subito", "email", "whatsapp", "airbnb", "booking", "altro"];
+
+/** Lifecycle states of a message in the agent inbox. */
+export const AGENT_STATUSES = [
+  "new",        // just received, not yet processed
+  "processing", // AI is evaluating
+  "replied",    // a response has been composed/sent
+  "booked",     // a booking was created from this inquiry
+  "rejected",   // declined (not available, not suitable)
+  "ignored",    // spam / irrelevant
+];
+
+/** Types of decisions the Decision Engine can produce. */
+export const AGENT_DECISION_TYPES = [
+  "available",           // dates free → quote + propose booking
+  "unavailable",         // dates occupied → suggest alternatives or politely decline
+  "partially_available", // overlap → propose adjusted dates
+  "needs_info",          // missing checkin/checkout → ask for details
+  "price_negotiation",   // guest asked for discount → evaluate and respond
+  "manual_review",       // engine not confident → escalate to owner
+];
+
+/**
+ * Per-platform configuration for the agent.
+ *
+ * requiresParsing  – message is free-text and needs AI NLP extraction
+ * tone             – default reply tone for response generation
+ * autonomyHint     – suggested autonomy level (low=always ask owner, high=auto-send)
+ * trustBaseline    – how much to trust guest data before verification
+ * commissionPct    – platform commission percentage (mirrors COMMISSIONS map)
+ */
+export const AGENT_PLATFORM_PROFILES = {
+  subito:   { label: "Subito.it",   requiresParsing: true,  tone: "informal_it", autonomyHint: "low",    trustBaseline: "low",    commissionPct: 0  },
+  email:    { label: "Email",       requiresParsing: true,  tone: "formal_it",   autonomyHint: "medium", trustBaseline: "medium", commissionPct: 0  },
+  whatsapp: { label: "WhatsApp",    requiresParsing: true,  tone: "informal_it", autonomyHint: "medium", trustBaseline: "low",    commissionPct: 0  },
+  airbnb:   { label: "Airbnb",      requiresParsing: false, tone: "formal_it",   autonomyHint: "high",   trustBaseline: "high",   commissionPct: 3  },
+  booking:  { label: "Booking.com", requiresParsing: false, tone: "formal_it",   autonomyHint: "high",   trustBaseline: "high",   commissionPct: 15 },
+  altro:    { label: "Altro",       requiresParsing: true,  tone: "formal_it",   autonomyHint: "low",    trustBaseline: "low",    commissionPct: 0  },
+};
