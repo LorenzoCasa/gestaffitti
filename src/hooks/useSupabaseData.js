@@ -90,7 +90,7 @@ export default function useSupabaseData() {
   const updateBooking = async (id, formData) => {
     const row = bookingToDb(formData);
     const { error } = await supabase.from("bookings").update(row).eq("id", id);
-    if (!error) setBookings(bs => bs.map(b => b.id === id ? { ...formData, id, price: Number(formData.price), deposit: Number(formData.deposit) || 0 } : b));
+    if (!error) setBookings(bs => bs.map(b => b.id === id ? { ...formData, id, price: Number(formData.price), deposit: Number(formData.deposit) || 0, status: formData.status ?? "confirmed" } : b));
   };
   const deleteBooking = async (id) => {
     await supabase.from("bookings").delete().eq("id", id);
