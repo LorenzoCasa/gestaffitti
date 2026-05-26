@@ -24,7 +24,11 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
 
   async function saveBooking() {
     if (!bForm.guest || !bForm.checkin || !bForm.checkout) return;
-    const data = { ...bForm, price: Number(bForm.price), deposit: Number(bForm.deposit) || 0 };
+    const rawDep = bForm.deposit;
+    const deposit = (rawDep === "" || rawDep === null || rawDep === undefined)
+      ? 0
+      : (Number.isFinite(Number(rawDep)) ? Number(rawDep) : 0);
+    const data = { ...bForm, price: Number(bForm.price), deposit };
     const result = editId
       ? await onUpdateBooking(editId, data)
       : await onAddBooking(data);

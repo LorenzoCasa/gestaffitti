@@ -1,3 +1,9 @@
+function moneyOrZero(value) {
+  if (value === "" || value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function dbToBooking(row) {
   return {
     ...row,
@@ -15,8 +21,8 @@ export function bookingToDb(b) {
     phone: b.phone || "",
     checkin: b.checkin,
     checkout: b.checkout,
-    price: Number(b.price) || 0,
-    deposit: Number(b.deposit) || 0,
+    price: moneyOrZero(b.price),
+    deposit: moneyOrZero(b.deposit),
     deposit_paid: b.depositPaid || false,
     platform: b.platform,
     notes: b.notes || "",

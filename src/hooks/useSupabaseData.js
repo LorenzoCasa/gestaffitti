@@ -16,50 +16,69 @@ export default function useSupabaseData() {
   async function handleSession(session) {
     setProfileError(false);
     console.log("[handleSession] uid:", session.user.id, "email:", session.user.email);
-    const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", session.user.id).single();
-    console.log("[handleSession] profile:", profile, "error:", error);
-    if (error || !profile) {
-      console.error("[auth] Profilo non trovato per", session.user.id, error?.message);
-      setProfileError(true); setLoading(false); return;
+    try {
+      const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", session.user.id).single();
+      console.log("[handleSession] profile:", profile, "error:", error);
+      if (error || !profile) {
+        console.error("[auth] Profilo non trovato per", session.user.id, error?.message);
+        setProfileError(true);
+        return;
+      }
+      setUser({ id: session.user.id, email: session.user.email, role: profile.role });
+      const [{ data: bData }, { data: eData }, { data: aptData, error: aptErr }, { data: catData }] = await Promise.all([
+        supabase.from("bookings").select("*").order("checkin"),
+        supabase.from("expenses").select("*").order("date", { ascending: false }),
+        supabase.from("apartments").select("*").eq("active", true).order("label"),
+        supabase.from("expense_categories").select("*").eq("active", true).order("sort_order"),
+      ]);
+      if (bData) setBookings(bData.map(dbToBooking));
+      if (eData) setExpenses(eData);
+      if (aptErr) {
+        console.error("[apartments] Errore caricamento:", aptErr.message);
+        setAptLoadError(true);
+      } else {
+        setAptLoadError(false);
+        setApartments(aptData?.length ? [APT_ALL, ...aptData] : [APT_ALL]);
+      }
+      if (catData?.length) setCategories(catData);
+    } catch (err) {
+      console.error("[handleSession] Errore inatteso:", err);
+      setProfileError(true);
+    } finally {
+      setLoading(false);
     }
-    setUser({ id: session.user.id, email: session.user.email, role: profile.role });
-    const [{ data: bData }, { data: eData }, { data: aptData, error: aptErr }, { data: catData }] = await Promise.all([
-      supabase.from("bookings").select("*").order("checkin"),
-      supabase.from("expenses").select("*").order("date", { ascending: false }),
-      supabase.from("apartments").select("*").eq("active", true).order("label"),
-      supabase.from("expense_categories").select("*").eq("active", true).order("sort_order"),
-    ]);
-    if (bData) setBookings(bData.map(dbToBooking));
-    if (eData) setExpenses(eData);
-    if (aptErr) {
-      console.error("[apartments] Errore caricamento:", aptErr.message);
-      setAptLoadError(true);
-    } else {
-      setAptLoadError(false);
-      setApartments(aptData?.length ? [APT_ALL, ...aptData] : [APT_ALL]);
-    }
-    if (catData?.length) setCategories(catData);
-    setLoading(false);
   }
 
   useEffect(() => {
-    // Usiamo SOLO onAuthStateChange perché garantisce che il JWT sia già applicato
-    // al client prima di scattare (a differenza di getSession che può precedere
-    // la propagazione interna del token necessaria per le query RLS).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    let isMounted = true;
+
+    // Inizializzazione esplicita al mount: non dipende da INITIAL_SESSION.
+    // getSession() legge subito da localStorage, non soffre del problema
+    // React Strict Mode (doppio mount) né di ritardi nel token refresh.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      if (session) handleSession(session);
+      else setLoading(false);
+    });
+
+    // Ascolta solo i cambiamenti successivi (login / logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
       console.log("[auth] evento:", event, "user:", session?.user?.email || "none");
-      if (event === "INITIAL_SESSION") {
-        if (session) await handleSession(session);
-        else setLoading(false);
-      } else if (event === "SIGNED_IN" && session) {
+      if (event === "SIGNED_IN" && session) {
         setLoading(true);
-        await handleSession(session);
+        handleSession(session);
       } else if (event === "SIGNED_OUT") {
         setUser(null); setProfileError(false); setAptLoadError(false);
         setBookings([]); setExpenses([]); setApartments([]); setCategories(CATEGORIES_FALLBACK);
+        setLoading(false);
       }
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
