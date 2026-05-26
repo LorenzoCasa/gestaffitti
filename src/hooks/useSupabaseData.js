@@ -85,12 +85,16 @@ export default function useSupabaseData() {
   const addBooking = async (formData) => {
     const row = bookingToDb(formData);
     const { data, error } = await supabase.from("bookings").insert(row).select().single();
-    if (!error && data) setBookings(bs => [...bs, dbToBooking(data)]);
+    if (error) return { ok: false, error };
+    if (data) setBookings(bs => [...bs, dbToBooking(data)]);
+    return { ok: true };
   };
   const updateBooking = async (id, formData) => {
     const row = bookingToDb(formData);
     const { error } = await supabase.from("bookings").update(row).eq("id", id);
-    if (!error) setBookings(bs => bs.map(b => b.id === id ? { ...formData, id, price: Number(formData.price), deposit: Number(formData.deposit) || 0, status: formData.status ?? "confirmed" } : b));
+    if (error) return { ok: false, error };
+    setBookings(bs => bs.map(b => b.id === id ? { ...formData, id, price: Number(formData.price), deposit: Number(formData.deposit) || 0, status: formData.status ?? "confirmed" } : b));
+    return { ok: true };
   };
   const deleteBooking = async (id) => {
     await supabase.from("bookings").delete().eq("id", id);
