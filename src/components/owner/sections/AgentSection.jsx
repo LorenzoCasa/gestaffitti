@@ -83,6 +83,12 @@ export default function AgentSection({ apartments, bookings, user }) {
 
     setInboxId(inboxRow?.id ?? null);
 
+    if (!inboxRow) {
+      alert("Errore nel salvataggio della richiesta. Controlla Supabase/RLS prima di procedere.");
+      setAnalyzing(false);
+      return;
+    }
+
     // 2. Risolvi regole appartamento
     const engineRules = resolveAptRules(formData.aptId, formData.source, aptRules);
 
@@ -138,7 +144,7 @@ export default function AgentSection({ apartments, bookings, user }) {
           <MessageComposer
             apartments={realApts}
             onAnalyze={handleAnalyze}
-            loading={analyzing}
+            loading={analyzing || agentLoading}
           />
           {decision && (
             <DecisionCard
