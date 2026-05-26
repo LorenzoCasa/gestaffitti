@@ -3,6 +3,7 @@ import { PLATFORMS, COMMISSIONS } from "../../../constants";
 import { formatDate, nightCount } from "../../../utils/dateUtils";
 import Modal from "../../shared/Modal";
 import Field, { iS, btnP } from "../../shared/Field";
+import DateRangePicker from "../../shared/DateRangePicker";
 
 export default function BookingsSection({ filteredBookings, realApts, aptColor, aptLabel, today, onAddBooking, onUpdateBooking, onDeleteBooking, onToggleDeposit }) {
   const emptyBooking = { apt: realApts[0]?.id || "apt1", guest: "", email: "", phone: "", checkin: "", checkout: "", price: "", deposit: "", depositPaid: false, platform: "Airbnb", notes: "", cleaning: false, checkinDone: false };
@@ -88,10 +89,11 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
             <Field label="Email"><input value={bForm.email} onChange={e=>setBForm({...bForm,email:e.target.value})} style={iS} placeholder="email@..." type="email"/></Field>
             <Field label="Telefono"><input value={bForm.phone} onChange={e=>setBForm({...bForm,phone:e.target.value})} style={iS} placeholder="3xx-xxx" type="tel"/></Field>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.65rem"}}>
-            <Field label="Check-in"><input type="date" value={bForm.checkin} onChange={e=>setBForm({...bForm,checkin:e.target.value})} style={iS}/></Field>
-            <Field label="Check-out"><input type="date" value={bForm.checkout} onChange={e=>setBForm({...bForm,checkout:e.target.value})} style={iS}/></Field>
-          </div>
+          <DateRangePicker
+            checkin={bForm.checkin}
+            checkout={bForm.checkout}
+            onChange={(ci, co) => setBForm({...bForm, checkin: ci, checkout: co})}
+          />
           <Field label="Piattaforma"><select value={bForm.platform} onChange={e=>setBForm({...bForm,platform:e.target.value})} style={iS}>{PLATFORMS.map(p=><option key={p}>{p}</option>)}</select></Field>
           <Field label="Totale €">
             <input type="number" value={bForm.price} onChange={e=>setBForm({...bForm,price:e.target.value})} style={iS} placeholder="0"/>
