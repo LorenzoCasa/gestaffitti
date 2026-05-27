@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AGENT_SOURCES } from "../../constants";
 import Field, { iS, btnP } from "../shared/Field";
 
-export default function MessageComposer({ apartments, onAnalyze, loading }) {
+export default function MessageComposer({ apartments, onAnalyze, loading, initialValues }) {
   const [form, setForm] = useState({
     rawText:      "",
     source:       "subito",
@@ -12,6 +12,15 @@ export default function MessageComposer({ apartments, onAnalyze, loading }) {
     guests:       2,
     offeredPrice: "",
   });
+
+  useEffect(() => {
+    if (!initialValues) return;
+    setForm(f => ({
+      ...f,
+      rawText: initialValues.raw_text ?? f.rawText,
+      source:  initialValues.source   ?? f.source,
+    }));
+  }, [initialValues]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 

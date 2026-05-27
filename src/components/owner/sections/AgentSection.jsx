@@ -4,6 +4,7 @@ import { runDecisionEngine } from "../../../utils/agentDecisionEngine";
 import useAgentData from "../../../hooks/useAgentData";
 import MessageComposer from "../../agent/MessageComposer";
 import DecisionCard from "../../agent/DecisionCard";
+import InboxList from "../../agent/InboxList";
 
 // ── Fallback rules (frontend only, nessuna regola configurata) ────────────────
 const FALLBACK_RULES = {
@@ -51,7 +52,9 @@ export default function AgentSection({ apartments, bookings, user }) {
   const {
     aptRules,
     agentLoading,
+    inbox,
     addInboxMessage,
+    updateInboxStatus,
     addDecision,
   } = useAgentData(user);
 
@@ -61,64 +64,97 @@ export default function AgentSection({ apartments, bookings, user }) {
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
 
+  const [selectedInboxItem, setSelectedInboxItem] = useState(null);
+
+  function handleLoadFromInbox(item) {
+    setSelectedInboxItem(item);
+    setDecision(null);
+    setSaved(false);
+    setInboxId(null);
+  }
+
   async function handleAnalyze(formData) {
     setAnalyzing(true);
     setDecision(null);
     setSaved(false);
     setInboxId(null);
 
-    // 1. Salva messaggio in agent_inbox
-    const inboxRow = await addInboxMessage({
-      source:                formData.source,
-      raw_text:              formData.rawText       || null,
-      parsed_checkin:        formData.checkin        || null,
-      parsed_checkout:       formData.checkout       || null,
-      parsed_guests:         formData.guests         || null,
-      parsed_offered_price:  formData.offeredPrice != null ? formData.offeredPrice : null,
-      parsed_apt_id:         formData.aptId          || null,
-      apt_id:                formData.aptId          || null,
-      status:                "processing",
-      owner_action_required: true,
-    });
+    try {
+      let currentInboxId;
 
-    setInboxId(inboxRow?.id ?? null);
+      if (selectedInboxItem) {
+        await updateInboxStatus(selectedInboxItem.id, "processing");
+        currentInboxId = selectedInboxItem.id;
+      } else {
+        const inboxRow = await addInboxMessage({
+          source:                formData.source,
+          raw_text:              formData.rawText       || null,
+          parsed_checkin:        formData.checkin        || null,
+          parsed_checkout:       formData.checkout       || null,
+          parsed_guests:         formData.guests         || null,
+          parsed_offered_price:  formData.offeredPrice != null ? formData.offeredPrice : null,
+          parsed_apt_id:         formData.aptId          || null,
+          apt_id:                formData.aptId          || null,
+          status:                "processing",
+          owner_action_required: true,
+        });
 
-    if (!inboxRow) {
-      alert("Errore nel salvataggio della richiesta. Controlla Supabase/RLS prima di procedere.");
+        if (!inboxRow) {
+          alert("Errore nel salvataggio della richiesta. Controlla Supabase/RLS prima di procedere.");
+          return;
+        }
+
+        currentInboxId = inboxRow.id;
+      }
+
+      setInboxId(currentInboxId);
+
+      const engineRules = resolveAptRules(formData.aptId, formData.source, aptRules);
+
+      const profile       = AGENT_PLATFORM_PROFILES[formData.source] ?? AGENT_PLATFORM_PROFILES.altro;
+      const commissionPct = profile.commissionPct ?? 0;
+
+      const inquiry = {
+        aptId:        formData.aptId,
+        guestName:    "ospite",
+        checkin:      formData.checkin      || null,
+        checkout:     formData.checkout     || null,
+        guests:       formData.guests,
+        offeredPrice: formData.offeredPrice,
+        source:       formData.source,
+      };
+
+      const result = runDecisionEngine(inquiry, bookings, engineRules, commissionPct);
+      setDecision(result);
+    } catch (err) {
+      console.error("[AgentSection] handleAnalyze:", err);
+      alert("Errore durante l'analisi della richiesta.");
+    } finally {
       setAnalyzing(false);
-      return;
     }
-
-    // 2. Risolvi regole appartamento
-    const engineRules = resolveAptRules(formData.aptId, formData.source, aptRules);
-
-    // 3. Commissione piattaforma
-    const profile       = AGENT_PLATFORM_PROFILES[formData.source] ?? AGENT_PLATFORM_PROFILES.altro;
-    const commissionPct = profile.commissionPct ?? 0;
-
-    // 4. Inquiry per il motore
-    const inquiry = {
-      aptId:        formData.aptId,
-      guestName:    "ospite",
-      checkin:      formData.checkin      || null,
-      checkout:     formData.checkout     || null,
-      guests:       formData.guests,
-      offeredPrice: formData.offeredPrice,
-      source:       formData.source,
-    };
-
-    // 5. Decision engine (puro, nessun side-effect)
-    const result = runDecisionEngine(inquiry, bookings, engineRules, commissionPct);
-    setDecision(result);
-    setAnalyzing(false);
   }
 
   async function handleSave(editedText) {
-    if (!decision) return;
+    if (!decision || !inboxId) return;
+
     setSaving(true);
-    await addDecision(inboxId, { ...decision, responseText: editedText });
-    setSaving(false);
-    setSaved(true);
+    try {
+      const savedDecision = await addDecision(inboxId, { ...decision, responseText: editedText });
+
+      if (!savedDecision) {
+        alert("Errore nel salvataggio della decisione.");
+        return;
+      }
+
+      await updateInboxStatus(inboxId, "replied");
+      setSaved(true);
+      setSelectedInboxItem(null);
+    } catch (err) {
+      console.error("[AgentSection] handleSave:", err);
+      alert("Errore durante il salvataggio della risposta.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -141,10 +177,12 @@ export default function AgentSection({ apartments, bookings, user }) {
         </div>
       ) : (
         <>
+          <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
           <MessageComposer
             apartments={realApts}
             onAnalyze={handleAnalyze}
             loading={analyzing || agentLoading}
+            initialValues={selectedInboxItem}
           />
           {decision && (
             <DecisionCard
