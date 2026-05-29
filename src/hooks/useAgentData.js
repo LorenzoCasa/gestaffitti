@@ -52,10 +52,12 @@ export default function useAgentData(user) {
 
   const addDecision = async (inboxId, decision) => {
     const row = {
-      inbox_id:      inboxId,
-      decision_type: decision.type,
-      response_text: decision.responseText ?? null,
-      payload:       decision.payload      ?? null,
+      inbox_id:       inboxId,
+      decision_type:  decision.type,
+      response_text:  decision.responseText  ?? null,
+      suggested_text: decision.suggested_text ?? null,
+      was_modified:   decision.was_modified   ?? false,
+      payload:        decision.payload        ?? null,
       decision_score: decision.decision_score ?? null,
     };
     const { data, error } = await supabase

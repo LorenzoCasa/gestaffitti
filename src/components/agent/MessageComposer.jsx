@@ -11,22 +11,35 @@ export default function MessageComposer({ apartments, onAnalyze, loading, initia
     checkout:     "",
     guests:       2,
     offeredPrice: "",
+    isFullMonth:  false,
+    fullMonthNum: null,
   });
 
   useEffect(() => {
     if (!initialValues) return;
     setForm(f => ({
       ...f,
-      rawText: initialValues.raw_text ?? f.rawText,
-      source:  initialValues.source   ?? f.source,
+      rawText:      initialValues.rawText      ?? initialValues.raw_text ?? f.rawText,
+      source:       initialValues.source       ?? f.source,
+      checkin:      initialValues.checkin      ?? f.checkin,
+      checkout:     initialValues.checkout     ?? f.checkout,
+      guests:       initialValues.guests       ?? f.guests,
+      aptId:        initialValues.aptId        ?? f.aptId,
+      offeredPrice: initialValues.offeredPrice ?? f.offeredPrice,
+      isFullMonth:  initialValues.isFullMonth  ?? f.isFullMonth,
+      fullMonthNum: initialValues.fullMonthNum ?? f.fullMonthNum,
     }));
   }, [initialValues]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   function handleAnalyze() {
-    if (!form.aptId || !form.checkin || !form.checkout) {
-      alert("Seleziona appartamento, check-in e check-out prima di analizzare.");
+    if (!form.aptId) {
+      alert("Seleziona un appartamento prima di analizzare.");
+      return;
+    }
+    if (!form.rawText && !form.checkin && !form.checkout && !form.isFullMonth) {
+      alert("Incolla il messaggio ricevuto oppure inserisci le date manualmente.");
       return;
     }
     onAnalyze({

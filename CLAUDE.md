@@ -1,3 +1,179 @@
-# Istruzioni per Claude Code
+# GestAffitti — Claude Code Operating Instructions
 
-Dopo ogni modifica richiesta dall'utente, esegui automaticamente git add -A, git commit con messaggio descrittivo, e git push origin main senza chiedere conferma.
+## Product Goal
+
+GestAffitti è una web app per gestione affitti brevi.
+
+L'obiettivo è costruire un sistema intelligente per gestire:
+- appartamenti
+- calendario/prenotazioni
+- disponibilità
+- prezzi stagionali
+- regole di soggiorno
+- messaggi arrivati da Subito
+- contatti/leads
+- risposte suggerite da approvare
+
+GestAffitti non deve diventare un semplice risponditore automatico.
+Deve diventare un'app agent-ready con un futuro LLM verticale specializzato in gestione affitti brevi.
+
+## Product Direction
+
+La struttura corretta è:
+
+1. GestAffitti contiene dati certi e regole deterministiche.
+2. Il futuro LLM verticale legge un contesto strutturato generato dall'app.
+3. Il LLM genera testo naturale e suggerimenti.
+4. L'utente approva/modifica prima dell'invio.
+5. In futuro l'agente personale generale dell'utente potrà usare GestAffitti come strumento verticale.
+
+## Deterministic Core
+
+Questi elementi sono fonte di verità e non devono essere inventati dall'LLM:
+- appartamenti
+- dotazioni appartamenti
+- calendario/prenotazioni
+- disponibilità reale
+- prezzi stagionali
+- regole soggiorno
+- alternative disponibili
+- messaggi ricevuti
+- decisioni approvate/modificate
+
+Il calendario è fonte di verità.
+Prezzo corretto non significa disponibilità.
+La disponibilità deve essere verificata sempre tramite calendario/prenotazioni.
+
+## Current Pricing Rules
+
+Prezzi attuali MVP:
+- Giugno: 500 €/settimana, 1600 €/mese intero
+- Luglio: 800 €/settimana, 2600 €/mese intero
+- Agosto: 800 €/settimana, 2600 €/mese intero
+- Settembre: 500 €/settimana, 1500 €/mese intero
+
+Per soggiorni di 2 o 3 settimane:
+- prezzo = prezzo settimana × numero settimane
+
+## Current Stay Rules
+
+Per giugno, luglio e agosto:
+- soggiorni da sabato a sabato
+- durate valide: 7, 14, 21 notti
+- mese intero valutabile
+
+Settembre è prezzato, ma può essere trattato con maggiore flessibilità salvo istruzioni diverse.
+
+## LLM Rules
+
+Non implementare API LLM senza approvazione esplicita.
+Non inserire chiavi API.
+Non chiamare LLM dal frontend.
+Non lasciare che l'LLM decida:
+- prezzo
+- disponibilità
+- calendario
+- appartamento
+- creazione prenotazione
+- invio messaggi
+
+Il futuro LLM deve ricevere un context strutturato e generare solo una risposta naturale da approvare.
+
+## Autonomy Allowed
+
+Puoi lavorare in autonomia su:
+- lettura file
+- analisi tecnica
+- piano breve
+- modifiche codice dentro lo scope approvato
+- creazione utility in src/utils
+- correzione errori build
+- refactoring locale dentro massimo 3 file
+- esecuzione npm run build
+- test node locali
+- riepilogo finale
+
+## Must Ask Before
+
+Devi fermarti e chiedere conferma prima di:
+- modificare database o creare migration
+- aggiungere dipendenze npm
+- introdurre API esterne
+- collegare LLM
+- modificare autenticazione o sicurezza
+- modificare Edge Function già funzionanti
+- cambiare architettura generale
+- modificare più di 3 file applicativi principali
+- superare lo scope iniziale
+- fare commit
+- fare push
+- fare deploy
+
+## Never
+
+Non fare mai senza conferma:
+- commit
+- push
+- deploy
+- invio automatico messaggi
+- creazione automatica prenotazioni
+- chiamate API esterne
+- modifiche database non richieste
+- riscrittura completa dell'architettura
+- spostamento massivo di file
+- refactor non richiesti
+
+## Development Protocol
+
+Per ogni task:
+
+1. Leggi i file coinvolti.
+2. Proponi piano breve.
+3. Se il task è nello scope approvato, procedi.
+4. Modifica solo i file necessari.
+5. Esegui npm run build.
+6. Se la build fallisce, correggi solo l'errore minimo.
+7. Mostra riepilogo finale:
+   - file modificati
+   - build status
+   - come testare
+   - eventuali decisioni da prendere
+
+## File Writing Rule
+
+Se il tool Write tronca contenuti o produce file corrotti:
+- usa Python Path.write_text
+- usa patch Python chirurgiche
+- evita heredoc lunghi se il contenuto viene troncato
+- dopo ogni file importante esegui npm run build
+
+## Current Technical Direction
+
+Evitare di accumulare troppa logica in AgentSection.
+
+La direzione corretta è creare un orchestratore:
+
+src/utils/rentalAgentOrchestrator.js
+
+Responsabilità orchestrator:
+- ricevere rawText, rawMetadata, apartments, bookings, aptRules
+- chiamare parser
+- risolvere appartamento
+- applicare stay rules
+- calcolare prezzo
+- verificare disponibilità
+- calcolare alternative
+- costruire responseContext
+- produrre suggestedResponse
+
+AgentSection deve mostrare il risultato, non contenere tutta la logica.
+
+## Current Important Issue
+
+La risposta suggerita oggi considera prezzi e regole, ma deve rispettare sempre il calendario.
+
+Regola fondamentale:
+se il calendario dice occupato, la risposta non deve mai dire disponibile.
+
+Prossimo sviluppo funzionale:
+integrare correttamente disponibilità reale e alternative calendario nella risposta.
