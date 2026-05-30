@@ -1,57 +1,12 @@
 import { useState } from "react";
-import { parseAgentInquiry } from "../../../utils/agentParser";
+import { parseAgentInquiry }    from "../../../utils/agentParser";
 import { resolveListingFromTitle } from "../../../utils/agentListingResolver";
-import { checkStayRules }         from "../../../utils/agentStayRules";
-import { findAlternatives }       from "../../../utils/agentAlternatives";
-import { getSubitoSeasonalPrice } from "../../../utils/agentSeasonalRates";
-import { buildSubitoResponse }    from "../../../utils/agentResponseBuilder";
-import { AGENT_PLATFORM_PROFILES } from "../../../constants";
-import { runDecisionEngine } from "../../../utils/agentDecisionEngine";
+import { runRentalAgent }        from "../../../utils/rentalAgentOrchestrator";
 import useAgentData from "../../../hooks/useAgentData";
 import MessageComposer from "../../agent/MessageComposer";
 import DecisionCard from "../../agent/DecisionCard";
 import InboxList from "../../agent/InboxList";
 
-// ── Fallback rules (frontend only, nessuna regola configurata) ────────────────
-const FALLBACK_RULES = {
-  baseNightlyRate:  80,
-  cleaningFee:       0,
-  extraGuestFee:     0,
-  guestThreshold:    2,
-  deposit:           0,
-  minNights:         1,
-  bufferBeforeDays:  0,
-  bufferAfterDays:   0,
-  maxDiscountPct:   10,
-  minNetTarget:      0,
-};
-
-// ── snake_case DB → camelCase motore ──────────────────────────────────────────
-function agentRuleToEngineRules(rule) {
-  return {
-    baseNightlyRate:  rule.base_nightly_rate,
-    cleaningFee:      rule.cleaning_fee       ?? 0,
-    extraGuestFee:    rule.extra_guest_fee     ?? 0,
-    guestThreshold:   rule.guest_threshold     ?? 2,
-    deposit:          rule.deposit_amount      ?? 0,
-    minNights:        rule.min_nights          ?? 1,
-    bufferBeforeDays: rule.buffer_before_days  ?? 0,
-    bufferAfterDays:  rule.buffer_after_days   ?? 0,
-    maxDiscountPct:   rule.max_discount_pct    ?? 10,
-    minNetTarget:     rule.min_net_target      ?? 0,
-  };
-}
-
-// ── Risoluzione regole: source-specific → default → fallback ──────────────────
-function resolveAptRules(aptId, source, aptRules) {
-  const specific = aptRules.find(r => r.apt_id === aptId && r.source === source);
-  if (specific) return agentRuleToEngineRules(specific);
-  const dflt = aptRules.find(r => r.apt_id === aptId && r.source === "default");
-  if (dflt) return agentRuleToEngineRules(dflt);
-  return { ...FALLBACK_RULES };
-}
-
-// ── Componente principale ─────────────────────────────────────────────────────
 export default function AgentSection({ apartments, bookings, user }) {
   const realApts = apartments.filter(a => a.id !== "all");
 
@@ -102,16 +57,16 @@ export default function AgentSection({ apartments, bookings, user }) {
     setInboxId(null);
 
     try {
-      const parsedFromRaw = parseAgentInquiry(formData.rawText ?? "", selectedInboxItem?.raw_metadata ?? {});
-      const normalizedFormData = {
-        ...formData,
-        checkin:      formData.checkin      || parsedFromRaw.checkin      || "",
-        checkout:     formData.checkout     || parsedFromRaw.checkout     || "",
-        guests:       Number(formData.guests) || parsedFromRaw.guests     || null,
-        offeredPrice: formData.offeredPrice  ?? parsedFromRaw.offeredPrice ?? null,
-        isFullMonth:  formData.isFullMonth   || parsedFromRaw.isFullMonth  || false,
-        fullMonthNum: formData.fullMonthNum  || parsedFromRaw.fullMonthNum || null,
-      };
+      const agentResult = runRentalAgent({
+        rawText:     formData.rawText,
+        rawMetadata: selectedInboxItem?.raw_metadata ?? {},
+        formData,
+        apartments:  realApts,
+        bookings,
+        aptRules,
+      });
+
+      const { normalizedFormData } = agentResult;
 
       let currentInboxId;
 
@@ -141,96 +96,7 @@ export default function AgentSection({ apartments, bookings, user }) {
       }
 
       setInboxId(currentInboxId);
-
-      const engineRules = resolveAptRules(normalizedFormData.aptId, normalizedFormData.source, aptRules);
-
-      const profile       = AGENT_PLATFORM_PROFILES[normalizedFormData.source] ?? AGENT_PLATFORM_PROFILES.altro;
-      const commissionPct = profile.commissionPct ?? 0;
-
-      const inquiry = {
-        aptId:        normalizedFormData.aptId,
-        guestName:    "ospite",
-        checkin:      normalizedFormData.checkin      || null,
-        checkout:     normalizedFormData.checkout     || null,
-        guests:       normalizedFormData.guests,
-        offeredPrice: normalizedFormData.offeredPrice,
-        source:       normalizedFormData.source,
-      };
-
-      const engineResult = runDecisionEngine(inquiry, bookings, engineRules, commissionPct);
-
-      const parsedForResponse = {
-        checkin:      normalizedFormData.checkin      || null,
-        checkout:     normalizedFormData.checkout     || null,
-        guests:       normalizedFormData.guests       || null,
-        offeredPrice: normalizedFormData.offeredPrice ?? null,
-        isFullMonth:  normalizedFormData.isFullMonth  ?? false,
-        fullMonthNum: normalizedFormData.fullMonthNum ?? null,
-        missingFields: parsedFromRaw.missingFields ?? [],
-        warnings:      parsedFromRaw.warnings     ?? [],
-      };
-
-      const stayRuleResult = checkStayRules(
-        parsedForResponse.checkin,
-        parsedForResponse.checkout,
-        {
-          isFullMonth:  parsedForResponse.isFullMonth,
-          fullMonthNum: parsedForResponse.fullMonthNum,
-        }
-      );
-
-      const seasonalPrice = getSubitoSeasonalPrice({
-        checkin:      parsedForResponse.checkin,
-        checkout:     parsedForResponse.checkout,
-        isFullMonth:  parsedForResponse.isFullMonth,
-        fullMonthNum: parsedForResponse.fullMonthNum,
-      });
-
-      const enrichedStayRuleResult = {
-        ...stayRuleResult,
-        suggestedValidRanges: stayRuleResult.suggestedValidRanges.map(r => ({
-          ...r,
-          pricing: getSubitoSeasonalPrice({
-            checkin: r.checkin, checkout: r.checkout,
-            isFullMonth: false, fullMonthNum: null,
-          }),
-        })),
-      };
-
-      const availabilityResult = engineResult.payload?.avail ?? null;
-
-      const alternatives = findAlternatives({
-        aptId:             normalizedFormData.aptId,
-        requestedCheckin:  parsedForResponse.checkin,
-        requestedCheckout: parsedForResponse.checkout,
-        isFullMonth:       parsedForResponse.isFullMonth,
-        apartments:        realApts,
-        bookings,
-      });
-
-      const subitoResponse = buildSubitoResponse({
-        parsed:         parsedForResponse,
-        stayRuleResult:     enrichedStayRuleResult,
-        seasonalPrice,
-        apartmentLabel:     realApts.find(a => a.id === normalizedFormData.aptId)?.label ?? "",
-        availabilityResult,
-        alternatives,
-      });
-
-      const finalDecision = {
-        ...engineResult,
-        responseText: subitoResponse.responseText || engineResult.responseText,
-        payload: {
-          ...engineResult.payload,
-          parsed:         parsedForResponse,
-          stayRuleResult: enrichedStayRuleResult,
-          seasonalPrice,
-          subitoResponse,
-        },
-        requiresOwnerApproval: true,
-      };
-
-      setDecision(finalDecision);
+      setDecision(agentResult.finalDecision);
     } catch (err) {
       console.error("[AgentSection] handleAnalyze:", err);
       alert("Errore durante l'analisi della richiesta.");
