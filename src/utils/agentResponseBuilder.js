@@ -7,109 +7,159 @@ function itDate(iso) {
   return parseInt(parts[2]) + " " + MONTH_NAMES[parseInt(parts[1])];
 }
 
-function buildAvailableText(parsed, stayRuleResult, seasonalPrice) {
+// Case: period valid + calendar free
+function buildAvailableText(parsed, seasonalPrice) {
   const ci = itDate(parsed.checkin);
   const co = itDate(parsed.checkout);
-
   let priceText = "";
   if (seasonalPrice && seasonalPrice.totalPrice) {
     const weeks  = seasonalPrice.weeks;
     const wLabel = weeks === 1 ? "la settimana" : weeks + " settimane";
-    priceText = "\nIl costo per " + wLabel + " è di " + seasonalPrice.totalPrice + " €.";
+    priceText = "\nIl costo per " + wLabel + " e di " + seasonalPrice.totalPrice + " euro.";
   }
-
-  return "Buongiorno, sì, per il periodo dal " + ci + " al " + co +
+  return "Buongiorno, si, per il periodo dal " + ci + " al " + co +
     " l'appartamento risulta disponibile." +
     priceText +
     "\nSe vuole, posso fornirle tutte le informazioni per procedere.";
 }
 
-function buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice) {
-  const ranges = (stayRuleResult && stayRuleResult.suggestedValidRanges) || [];
+// Case: calendar says occupied
+function buildUnavailableText(parsed, alternatives) {
+  const ci = itDate(parsed.checkin);
+  const co = itDate(parsed.checkout);
   let altBlock = "";
-
-  if (ranges.length > 0) {
-    const lines = ranges.map(r => {
-      const label = r.label.replace("->", "→");
-      const price = (seasonalPrice && seasonalPrice.weeklyRate)
-        ? " — " + (r.nights / 7 * seasonalPrice.weeklyRate) + " €"
+  if (alternatives && alternatives.length > 0) {
+    const lines = alternatives.map(a => {
+      const priceStr = a.pricing && a.pricing.totalPrice
+        ? " - " + a.pricing.totalPrice + " euro"
         : "";
+      const aptStr = a.aptLabel ? " (" + a.aptLabel + ")" : "";
+      return "- dal " + itDate(a.checkin) + " al " + itDate(a.checkout) +
+        " (" + a.nights + " notti)" + aptStr + priceStr;
+    });
+    altBlock = "\nSe le puo interessare, ho queste disponibilita:\n" +
+      lines.join("\n") + "\nMi faccia sapere.";
+  } else {
+    altBlock = "\nSe mi indica altre date o un periodo piu flessibile, verifico volentieri la disponibilita.";
+  }
+  return "Buongiorno, per il periodo dal " + ci + " al " + co +
+    " purtroppo l'appartamento non risulta disponibile." + altBlock;
+}
+
+// Case: dates don't follow sat-sat rule
+function buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice, alternatives) {
+  // Prefer calendar-verified alternatives; fall back to mathematical sat-sat suggestions
+  let displayRanges = [];
+  if (alternatives && alternatives.length > 0) {
+    displayRanges = alternatives.map(a => ({
+      label:   a.label,
+      pricing: a.pricing,
+      nights:  a.nights,
+    }));
+  } else {
+    displayRanges = (stayRuleResult && stayRuleResult.suggestedValidRanges) || [];
+  }
+
+  let altBlock = "";
+  if (displayRanges.length > 0) {
+    const lines = displayRanges.map(r => {
+      const label = r.label ? r.label.replace("->", "to") : "";
+      const price = r.pricing && r.pricing.totalPrice
+        ? " - " + r.pricing.totalPrice + " euro"
+        : (seasonalPrice && seasonalPrice.weeklyRate && r.nights)
+          ? " - " + (r.nights / 7 * seasonalPrice.weeklyRate) + " euro"
+          : "";
       return "- " + label + price;
     });
     altBlock = "\nPer le date richieste posso proporle queste soluzioni:\n" +
       lines.join("\n") +
-      "\nMi dica quale periodo le può andare meglio.";
+      "\nMi dica quale periodo le puo andare meglio.";
   } else {
-    altBlock = "\nMi dica pure quali date preferisce e verifico la disponibilità.";
+    altBlock = "\nMi dica pure quali date preferisce e verifico la disponibilita.";
   }
-
-  return "Buongiorno, per il periodo estivo lavoriamo principalmente con soggiorni da sabato a sabato." +
-    altBlock;
+  return "Buongiorno, per il periodo estivo lavoriamo principalmente con soggiorni da sabato a sabato." + altBlock;
 }
 
+// Case: full month request
 function buildFullMonthText(parsed, seasonalPrice) {
   const monthNum  = parsed.fullMonthNum;
-  const monthName = (monthNum && MONTH_NAMES[monthNum]) ? MONTH_NAMES[monthNum] : "richiesto";
-
+  const monthName = monthNum && MONTH_NAMES[monthNum] ? MONTH_NAMES[monthNum] : "richiesto";
   let priceText = "";
   if (seasonalPrice && seasonalPrice.totalPrice) {
-    priceText = "\nIl prezzo indicativo per tutto il mese è di " + seasonalPrice.totalPrice + " €.";
+    priceText = "\nIl prezzo indicativo per tutto il mese e di " + seasonalPrice.totalPrice + " euro.";
   }
-
   const guestsText = parsed.guests
     ? " Vedo che siete in " + parsed.guests + " persone."
     : " Se mi conferma il numero di persone, le do tutti i dettagli.";
-
   return "Buongiorno, per il mese intero di " + monthName + " possiamo valutarlo." +
     priceText + guestsText;
 }
 
+// Case: missing dates or guests
 function buildNeedsInfoText() {
-  return "Buongiorno, grazie per il messaggio.\nPer verificare disponibilità e prezzo mi servirebbe sapere il periodo preciso e il numero di persone.";
+  return "Buongiorno, grazie per il messaggio.\nPer verificare disponibilita e prezzo mi servirebbe sapere il periodo preciso e il numero di persone.";
 }
 
-export function buildSubitoResponse({ parsed, stayRuleResult, seasonalPrice, apartmentLabel }) {
-  const payload = { parsed, stayRuleResult, seasonalPrice, apartmentLabel };
+/**
+ * Build a suggested reply for a Subito inquiry.
+ *
+ * Decision priority:
+ * 1. isFullMonth                          → full_month
+ * 2. dates missing                        → needs_info
+ * 3. stay rules violated (not sat-sat)    → outside_rules
+ * 4. calendar says unavailable            → unavailable
+ * 5. calendar free                        → available
+ *
+ * The calendar check (availabilityResult) always wins over stay rules.
+ * All alternatives must be calendar-verified (from agentAlternatives.findAlternatives).
+ *
+ * @param {{
+ *   parsed:             object,
+ *   stayRuleResult:     object,
+ *   seasonalPrice:      object|null,
+ *   apartmentLabel:     string,
+ *   availabilityResult: object|null,  — from checkAvailability / engineResult.payload.avail
+ *   alternatives:       Array,        — from findAlternatives (calendar-verified)
+ * }} params
+ */
+export function buildSubitoResponse({
+  parsed,
+  stayRuleResult,
+  seasonalPrice,
+  apartmentLabel,
+  availabilityResult = null,
+  alternatives       = [],
+}) {
+  const payload = { parsed, stayRuleResult, seasonalPrice, apartmentLabel, availabilityResult, alternatives };
 
-  // Mese intero — ha priorità sulle date mancanti
+  // 1. Mese intero
   if ((parsed && parsed.isFullMonth) || (stayRuleResult && stayRuleResult.isFullMonth)) {
-    return {
-      type:                  "full_month",
-      responseText:          buildFullMonthText(parsed, seasonalPrice),
-      payload,
-      requiresOwnerApproval: true,
-      decision_score:        0.6,
-    };
+    return { type: "full_month", responseText: buildFullMonthText(parsed, seasonalPrice),
+      payload, requiresOwnerApproval: true, decision_score: 0.6 };
   }
 
-  // Dati insufficienti
+  // 2. Dati insufficienti
   if (!parsed || !parsed.checkin || !parsed.checkout || !stayRuleResult) {
-    return {
-      type:                  "needs_info",
-      responseText:          buildNeedsInfoText(),
-      payload,
-      requiresOwnerApproval: true,
-      decision_score:        0.1,
-    };
+    return { type: "needs_info", responseText: buildNeedsInfoText(),
+      payload, requiresOwnerApproval: true, decision_score: 0.1 };
   }
 
-  // Fuori regola sabato-sabato
+  // 3. Fuori regola sabato-sabato
   if (!stayRuleResult.valid) {
-    return {
-      type:                  "outside_rules",
-      responseText:          buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice),
-      payload,
-      requiresOwnerApproval: true,
-      decision_score:        0.5,
-    };
+    return { type: "outside_rules",
+      responseText: buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice, alternatives),
+      payload, requiresOwnerApproval: true, decision_score: 0.5 };
   }
 
-  // Periodo valido
-  return {
-    type:                  "available",
-    responseText:          buildAvailableText(parsed, stayRuleResult, seasonalPrice),
-    payload,
-    requiresOwnerApproval: true,
-    decision_score:        0.9,
-  };
+  // 4. Calendario: NON disponibile
+  if (availabilityResult && availabilityResult.available === false) {
+    return { type: "unavailable",
+      responseText: buildUnavailableText(parsed, alternatives),
+      payload, requiresOwnerApproval: true, decision_score: 0.4 };
+  }
+
+  // 5. Disponibile
+  return { type: "available",
+    responseText: buildAvailableText(parsed, seasonalPrice),
+    payload, requiresOwnerApproval: true, decision_score: 0.9 };
 }

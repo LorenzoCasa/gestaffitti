@@ -2,6 +2,7 @@ import { useState } from "react";
 import { parseAgentInquiry } from "../../../utils/agentParser";
 import { resolveListingFromTitle } from "../../../utils/agentListingResolver";
 import { checkStayRules }         from "../../../utils/agentStayRules";
+import { findAlternatives }       from "../../../utils/agentAlternatives";
 import { getSubitoSeasonalPrice } from "../../../utils/agentSeasonalRates";
 import { buildSubitoResponse }    from "../../../utils/agentResponseBuilder";
 import { AGENT_PLATFORM_PROFILES } from "../../../constants";
@@ -196,11 +197,24 @@ export default function AgentSection({ apartments, bookings, user }) {
         })),
       };
 
+      const availabilityResult = engineResult.payload?.avail ?? null;
+
+      const alternatives = findAlternatives({
+        aptId:             normalizedFormData.aptId,
+        requestedCheckin:  parsedForResponse.checkin,
+        requestedCheckout: parsedForResponse.checkout,
+        isFullMonth:       parsedForResponse.isFullMonth,
+        apartments:        realApts,
+        bookings,
+      });
+
       const subitoResponse = buildSubitoResponse({
         parsed:         parsedForResponse,
-        stayRuleResult: enrichedStayRuleResult,
+        stayRuleResult:     enrichedStayRuleResult,
         seasonalPrice,
-        apartmentLabel: realApts.find(a => a.id === normalizedFormData.aptId)?.label ?? "",
+        apartmentLabel:     realApts.find(a => a.id === normalizedFormData.aptId)?.label ?? "",
+        availabilityResult,
+        alternatives,
       });
 
       const finalDecision = {
