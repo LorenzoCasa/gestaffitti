@@ -11,6 +11,7 @@ import SettingsSection from "./components/owner/sections/SettingsSection";
 import BookingsSection from "./components/owner/sections/BookingsSection";
 import FinancesSection from "./components/owner/sections/FinancesSection";
 import AgentSection from "./components/owner/sections/AgentSection";
+import MessaggiSection from "./components/owner/sections/MessaggiSection";
 import useSupabaseData from "./hooks/useSupabaseData";
 
 // ────────────────────────────────────────────
@@ -83,7 +84,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
       </header>
 
       <nav style={{display:"flex",borderBottom:"1px solid #2a2010",background:"#0d0a07",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
-        {[{id:"dashboard",icon:"📊",label:"Home"},{id:"bookings",icon:"📅",label:"Prenot."},{id:"calendar",icon:"🗓",label:"Cal."},{id:"finances",icon:"💰",label:"Finanze"},{id:"guests",icon:"👤",label:"Ospiti"},{id:"operations",icon:"🧹",label:"Operaz."},{id:"agent",icon:"🤖",label:"Agente"},{id:"settings",icon:"⚙️",label:"Impost."}].map(s=>(
+        {[{id:"dashboard",icon:"📊",label:"Home"},{id:"bookings",icon:"📅",label:"Prenot."},{id:"calendar",icon:"🗓",label:"Cal."},{id:"finances",icon:"💰",label:"Finanze"},{id:"guests",icon:"👤",label:"Ospiti"},{id:"operations",icon:"🧹",label:"Operaz."},{id:"agent",icon:"🤖",label:"Agente"},{id:"messaggi",icon:"✉️",label:"Messaggi"},{id:"settings",icon:"⚙️",label:"Impost."}].map(s=>(
           <button key={s.id} onClick={()=>setSection(s.id)} style={{padding:"0.65rem 0.85rem",border:"none",background:"none",cursor:"pointer",color:section===s.id?"#c9a96e":"#5a4a30",borderBottom:section===s.id?"2px solid #c9a96e":"2px solid transparent",fontFamily:"'Playfair Display',serif",fontSize:"0.7rem",whiteSpace:"nowrap",display:"flex",flexDirection:"column",alignItems:"center",gap:"0.15rem",flexShrink:0}}>
             <span style={{fontSize:"0.9rem"}}>{s.icon}</span><span>{s.label}</span>
           </button>
@@ -294,6 +295,11 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
         {/* AGENTE */}
         {section==="agent"&&(
           <AgentSection bookings={bookings} apartments={apartments} user={user}/>
+        )}
+
+        {/* MESSAGGI */}
+        {section==="messaggi"&&(
+          <MessaggiSection user={user} apartments={apartments}/>
         )}
 
         {/* IMPOSTAZIONI */}
