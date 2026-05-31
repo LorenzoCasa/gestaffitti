@@ -163,9 +163,9 @@ export function parseAgentInquiry(rawText, rawMetadata = {}) {
   const questions = extractQuestions(text);
 
   const missingFields = [];
-  if (!checkin) missingFields.push("checkin");
+  if (!checkin  && !_fm) missingFields.push("checkin");
   if (!checkout && !_fm) missingFields.push("checkout");
-  if (!guests)   missingFields.push("guests");
+  if (!guests)           missingFields.push("guests");
 
   return {
     checkin,

@@ -6,14 +6,17 @@ import useAgentData from "../../../hooks/useAgentData";
 import MessageComposer from "../../agent/MessageComposer";
 import DecisionCard from "../../agent/DecisionCard";
 import InboxList from "../../agent/InboxList";
+import AgentChat from "../../agent/AgentChat";
 
 export default function AgentSection({ apartments, bookings, user }) {
   const realApts = apartments.filter(a => a.id !== "all");
+  const [mode, setMode] = useState("analisi");
 
   const {
     aptRules,
     agentLoading,
     inbox,
+    decisions,
     addInboxMessage,
     updateInboxStatus,
     addDecision,
@@ -139,55 +142,77 @@ export default function AgentSection({ apartments, bookings, user }) {
 
   return (
     <div>
-      <h2 style={{ fontFamily: "'Playfair Display',serif", color: "#c9a96e", fontSize: "1.2rem", marginBottom: "0.9rem", marginTop: "0.4rem" }}>
+      <h2 style={{ fontFamily: "'Playfair Display',serif", color: "#c9a96e", fontSize: "1.2rem", marginBottom: "0.6rem", marginTop: "0.4rem" }}>
         🤖 Agente Richieste
       </h2>
 
-      {agentLoading && (
-        <div style={{ color: "#6a5a40", fontSize: "0.8rem", marginBottom: "0.7rem" }}>
-          Caricamento regole appartamento…
-        </div>
+      <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.9rem" }}>
+        {[{ id: "analisi", label: "Analisi" }, { id: "chat", label: "Chat" }].map(t => (
+          <button key={t.id} onClick={() => setMode(t.id)} style={{ padding: "0.3rem 0.9rem", borderRadius: "6px", border: "1px solid #3a3020", background: mode === t.id ? "#c9a96e" : "#1a1612", color: mode === t.id ? "#0a0806" : "#8a7a60", fontWeight: mode === t.id ? "700" : "400", cursor: "pointer", fontSize: "0.75rem" }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "chat" && (
+        <AgentChat
+          apartments={apartments}
+          bookings={bookings}
+          aptRules={aptRules}
+          inbox={inbox}
+          decisions={decisions}
+        />
       )}
 
-      {realApts.length === 0 ? (
-        <div style={{ background: "rgba(201,169,110,0.08)", border: "1px solid #c9a96e44", borderRadius: "10px", padding: "0.9rem 1rem" }}>
-          <span style={{ color: "#c9a96e", fontSize: "0.85rem" }}>
-            ⚠️ Nessun appartamento configurato. Aggiungine uno in <strong>Impostazioni</strong>.
-          </span>
-        </div>
-      ) : (
+      {mode === "analisi" && (
         <>
-          <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
-          {parserResult && (
-            <div style={{ background: "#0d0a07", border: "1px solid #2a2010", borderRadius: "10px", padding: "0.65rem 0.9rem", marginBottom: "0.7rem", fontSize: "0.73rem" }}>
-              <div style={{ color: "#8a7a60", fontFamily: "'Playfair Display',serif", marginBottom: "0.3rem" }}>🧠 Parser</div>
-              {parserResult.isFullMonth && (
-                <div style={{ color: "#c9a96e" }}>📅 Richiesta mese intero (mese {parserResult.fullMonthNum})</div>
-              )}
-              {parserResult.missingFields.length > 0 && (
-                <div style={{ color: "#c96e6e" }}>⚠️ Da completare: {parserResult.missingFields.join(", ")}</div>
-              )}
-              {parserResult.warnings.length > 0 && (
-                <div style={{ color: "#c9c96e" }}>⚠️ {parserResult.warnings.join(", ")}</div>
-              )}
-              {!parserResult.isFullMonth && parserResult.missingFields.length === 0 && (
-                <div style={{ color: "#6ec99a" }}>✓ Date e ospiti riconosciuti</div>
-              )}
+          {agentLoading && (
+            <div style={{ color: "#6a5a40", fontSize: "0.8rem", marginBottom: "0.7rem" }}>
+              Caricamento regole appartamento…
             </div>
           )}
-          <MessageComposer
-            apartments={realApts}
-            onAnalyze={handleAnalyze}
-            loading={analyzing || agentLoading}
-            initialValues={composerInitialValues}
-          />
-          {decision && (
-            <DecisionCard
-              decision={decision}
-              onSave={handleSave}
-              saving={saving}
-              saved={saved}
-            />
+
+          {realApts.length === 0 ? (
+            <div style={{ background: "rgba(201,169,110,0.08)", border: "1px solid #c9a96e44", borderRadius: "10px", padding: "0.9rem 1rem" }}>
+              <span style={{ color: "#c9a96e", fontSize: "0.85rem" }}>
+                ⚠️ Nessun appartamento configurato. Aggiungine uno in <strong>Impostazioni</strong>.
+              </span>
+            </div>
+          ) : (
+            <>
+              <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
+              {parserResult && (
+                <div style={{ background: "#0d0a07", border: "1px solid #2a2010", borderRadius: "10px", padding: "0.65rem 0.9rem", marginBottom: "0.7rem", fontSize: "0.73rem" }}>
+                  <div style={{ color: "#8a7a60", fontFamily: "'Playfair Display',serif", marginBottom: "0.3rem" }}>🧠 Parser</div>
+                  {parserResult.isFullMonth && (
+                    <div style={{ color: "#c9a96e" }}>📅 Richiesta mese intero (mese {parserResult.fullMonthNum})</div>
+                  )}
+                  {parserResult.missingFields.length > 0 && (
+                    <div style={{ color: "#c96e6e" }}>⚠️ Da completare: {parserResult.missingFields.join(", ")}</div>
+                  )}
+                  {parserResult.warnings.length > 0 && (
+                    <div style={{ color: "#c9c96e" }}>⚠️ {parserResult.warnings.join(", ")}</div>
+                  )}
+                  {!parserResult.isFullMonth && parserResult.missingFields.length === 0 && (
+                    <div style={{ color: "#6ec99a" }}>✓ Date e ospiti riconosciuti</div>
+                  )}
+                </div>
+              )}
+              <MessageComposer
+                apartments={realApts}
+                onAnalyze={handleAnalyze}
+                loading={analyzing || agentLoading}
+                initialValues={composerInitialValues}
+              />
+              {decision && (
+                <DecisionCard
+                  decision={decision}
+                  onSave={handleSave}
+                  saving={saving}
+                  saved={saved}
+                />
+              )}
+            </>
           )}
         </>
       )}
