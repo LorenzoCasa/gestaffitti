@@ -106,11 +106,12 @@ function buildNeedsInfoText() {
  * Decision priority:
  * 1. isFullMonth                          → full_month
  * 2. dates missing                        → needs_info
- * 3. stay rules violated (not sat-sat)    → outside_rules
- * 4. calendar says unavailable            → unavailable
- * 5. calendar free                        → available
+ * 3. calendar says unavailable            → unavailable   ← calendar always wins
+ * 4. stay rules violated (not sat-sat)    → outside_rules (calendar is free)
+ * 5. calendar free + rules valid          → available
  *
- * The calendar check (availabilityResult) always wins over stay rules.
+ * The calendar check (step 3) runs before stay-rules (step 4) so that an
+ * occupied period is never shown as "outside_rules" with misleading alternatives.
  * All alternatives must be calendar-verified (from agentAlternatives.findAlternatives).
  *
  * @param {{
@@ -144,18 +145,18 @@ export function buildSubitoResponse({
       payload, requiresOwnerApproval: true, decision_score: 0.1 };
   }
 
-  // 3. Fuori regola sabato-sabato
-  if (!stayRuleResult.valid) {
-    return { type: "outside_rules",
-      responseText: buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice, alternatives),
-      payload, requiresOwnerApproval: true, decision_score: 0.5 };
-  }
-
-  // 4. Calendario: NON disponibile
+  // 3. Calendario: NON disponibile — il calendario vince sempre sulle regole
   if (availabilityResult && availabilityResult.available === false) {
     return { type: "unavailable",
       responseText: buildUnavailableText(parsed, alternatives),
       payload, requiresOwnerApproval: true, decision_score: 0.4 };
+  }
+
+  // 4. Fuori regola sabato-sabato (solo se il calendario è libero)
+  if (!stayRuleResult.valid) {
+    return { type: "outside_rules",
+      responseText: buildOutsideRulesText(parsed, stayRuleResult, seasonalPrice, alternatives),
+      payload, requiresOwnerApproval: true, decision_score: 0.5 };
   }
 
   // 5. Disponibile
