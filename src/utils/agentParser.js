@@ -89,6 +89,23 @@ function extractTextualDates(text) {
     }
   }
 
+  // "1 luglio 10 luglio" — two day+month groups separated only by whitespace
+  const rSpaceOnly = new RegExp(
+    "(\\d{1,2})\\s+(" + MONTH_NAMES_IT + ")(?:\\s+(\\d{4}))?\\s+(\\d{1,2})\\s+(" + MONTH_NAMES_IT + ")(?:\\s+(\\d{4}))?",
+    "i"
+  );
+  const mSpace = t.match(rSpaceOnly);
+  if (mSpace) {
+    const m1 = MONTHS_IT[mSpace[2].toLowerCase()];
+    const m2 = MONTHS_IT[mSpace[5].toLowerCase()];
+    if (m1 && m2) {
+      return {
+        checkin:  iso(Number(mSpace[1]), m1, mSpace[3] ? Number(mSpace[3]) : inferYear(m1)),
+        checkout: iso(Number(mSpace[4]), m2, mSpace[6] ? Number(mSpace[6]) : inferYear(m2)),
+      };
+    }
+  }
+
   return { checkin: null, checkout: null };
 }
 
