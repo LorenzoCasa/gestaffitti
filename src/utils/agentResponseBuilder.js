@@ -24,26 +24,39 @@ function buildAvailableText(parsed, seasonalPrice) {
 }
 
 // Case: calendar says occupied
-function buildUnavailableText(parsed, alternatives) {
-  const ci = itDate(parsed.checkin);
-  const co = itDate(parsed.checkout);
+function buildUnavailableText(parsed, alternatives, requestedAptLabel) {
+  const ci      = itDate(parsed.checkin);
+  const co      = itDate(parsed.checkout);
+  const aptName = requestedAptLabel || "l'appartamento";
+  const alts    = alternatives || [];
+
+  // Separate alternatives on the same apt (different dates) vs other apartments
+  const sameAptAlts  = alts.filter(a => !a.aptLabel || a.aptLabel === requestedAptLabel);
+  const otherAptAlts = alts.filter(a => a.aptLabel && a.aptLabel !== requestedAptLabel);
+
   let altBlock = "";
-  if (alternatives && alternatives.length > 0) {
-    const lines = alternatives.map(a => {
-      const priceStr = a.pricing && a.pricing.totalPrice
-        ? " - " + a.pricing.totalPrice + " euro"
-        : "";
-      const aptStr = a.aptLabel ? " (" + a.aptLabel + ")" : "";
-      return "- dal " + itDate(a.checkin) + " al " + itDate(a.checkout) +
-        " (" + a.nights + " notti)" + aptStr + priceStr;
+  if (sameAptAlts.length > 0) {
+    const lines = sameAptAlts.map(a => {
+      const priceStr = a.pricing && a.pricing.totalPrice ? " - " + a.pricing.totalPrice + " euro" : "";
+      return "- dal " + itDate(a.checkin) + " al " + itDate(a.checkout) + " (" + a.nights + " notti)" + priceStr;
     });
-    altBlock = "\nSe le puo interessare, ho queste disponibilita:\n" +
-      lines.join("\n") + "\nMi faccia sapere.";
+    altBlock += "\nPer lo stesso appartamento ho queste date disponibili:\n" + lines.join("\n");
+  }
+  if (otherAptAlts.length > 0) {
+    const lines = otherAptAlts.map(a => {
+      const priceStr = a.pricing && a.pricing.totalPrice ? " - " + a.pricing.totalPrice + " euro" : "";
+      return "- " + a.aptLabel + ": dal " + itDate(a.checkin) + " al " + itDate(a.checkout) + " (" + a.nights + " notti)" + priceStr;
+    });
+    altBlock += "\nIn alternativa, posso proporle un altro appartamento:\n" + lines.join("\n");
+  }
+  if (sameAptAlts.length > 0 || otherAptAlts.length > 0) {
+    altBlock += "\nMi faccia sapere.";
   } else {
     altBlock = "\nSe mi indica altre date o un periodo piu flessibile, verifico volentieri la disponibilita.";
   }
+
   return "Buongiorno, per il periodo dal " + ci + " al " + co +
-    " purtroppo l'appartamento non risulta disponibile." + altBlock;
+    " purtroppo " + aptName + " non risulta disponibile." + altBlock;
 }
 
 // Case: dates don't follow sat-sat rule
@@ -148,7 +161,7 @@ export function buildSubitoResponse({
   // 3. Calendario: NON disponibile — il calendario vince sempre sulle regole
   if (availabilityResult && availabilityResult.available === false) {
     return { type: "unavailable",
-      responseText: buildUnavailableText(parsed, alternatives),
+      responseText: buildUnavailableText(parsed, alternatives, apartmentLabel),
       payload, requiresOwnerApproval: true, decision_score: 0.4 };
   }
 

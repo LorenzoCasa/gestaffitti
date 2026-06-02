@@ -33,6 +33,32 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Returns true if the email subject looks like a real customer inquiry.
+// Blocks system notifications like "Annuncio approvato", "Pubblicato", etc.
+function isCustomerMessage(subject: string): boolean {
+  const s = subject.toLowerCase();
+  return s.includes("nuovo messaggio");
+}
+
+function looksLikeHtml(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text);
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 // ── Handler principale ────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -87,6 +113,31 @@ serve(async (req: Request) => {
     );
   }
 
+  // 5b. Filtro noise: accetta solo messaggi cliente (subject contiene "Nuovo messaggio")
+  const subject = (
+    (payload.raw_metadata?.email_subject as string) ??
+    (payload.raw_metadata?.subject as string) ??
+    ""
+  ).trim();
+  if (subject && !isCustomerMessage(subject)) {
+    console.log(`[webhook] ignored — subject not a customer message: "${subject}"`);
+    return json({ result: "ignored", reason: "not_a_customer_message", subject }, 200);
+  }
+
+  // 5c. Strip HTML: se raw_text è HTML, lo pulisce e preserva l'originale in raw_metadata
+  let cleanText = rawText;
+  let htmlBody: string | null = null;
+  if (looksLikeHtml(rawText)) {
+    htmlBody  = rawText;
+    cleanText = stripHtml(rawText);
+    console.log(`[webhook] stripped HTML — clean length: ${cleanText.length}`);
+  }
+
+  const enrichedMetadata: Record<string, unknown> = {
+    ...(payload.raw_metadata ?? {}),
+    ...(htmlBody !== null ? { html_body: htmlBody } : {}),
+  };
+
   // 6. Supabase client (service-role — bypassa RLS)
   const supabaseUrl    = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -123,8 +174,8 @@ serve(async (req: Request) => {
       source,
       source_message_id:     sourceMessageId,
       source_thread_id:      payload.source_thread_id?.trim() ?? null,
-      raw_text:              rawText,
-      raw_metadata:          payload.raw_metadata ?? null,
+      raw_text:              cleanText,
+      raw_metadata:          enrichedMetadata,
       status:                "new",
       owner_action_required: true,
     })

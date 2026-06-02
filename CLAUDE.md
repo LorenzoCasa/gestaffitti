@@ -147,33 +147,52 @@ Se il tool Write tronca contenuti o produce file corrotti:
 - evita heredoc lunghi se il contenuto viene troncato
 - dopo ogni file importante esegui npm run build
 
-## Current Technical Direction
+## Apartment Mapping
 
-Evitare di accumulare troppa logica in AgentSection.
+Appartamenti reali nel database:
+- apt1 → Appartamento A → titolo Subito: "Lungomare Senigallia appartamento estivo 1"
+- apt2 → Appartamento B → titolo Subito: "Lungomare Senigallia appartamento estivo 2"
 
-La direzione corretta è creare un orchestratore:
+Il mapping è in `src/utils/agentListingResolver.js` (SUBITO_TITLE_MAP).
+Non usare mai il primo appartamento come fallback silenzioso.
+Se l'appartamento non viene riconosciuto: mostrare warning, non generare risposta.
 
-src/utils/rentalAgentOrchestrator.js
+Regola disponibilità:
+- se cliente scrive da annuncio 1 → risposta principale riguarda apt1
+- se apt1 non disponibile ma apt2 sì → apt2 è alternativa esplicita, mai l'appartamento principale
+- stessa logica al contrario
 
-Responsabilità orchestrator:
-- ricevere rawText, rawMetadata, apartments, bookings, aptRules
-- chiamare parser
-- risolvere appartamento
-- applicare stay rules
-- calcolare prezzo
-- verificare disponibilità
-- calcolare alternative
-- costruire responseContext
-- produrre suggestedResponse
+## Current Architecture
 
-AgentSection deve mostrare il risultato, non contenere tutta la logica.
+L'orchestratore `src/utils/rentalAgentOrchestrator.js` è costruito e stabile.
+Responsabilità: ricevere rawText, rawMetadata, apartments, bookings, aptRules →
+chiamare parser → risolvere appartamento → applicare stay rules → calcolare prezzo →
+verificare disponibilità → calcolare alternative → produrre suggestedResponse.
 
-## Current Important Issue
+Il calendario ha sempre priorità. La risposta non può mai dire disponibile se il calendario dice occupato.
 
-La risposta suggerita oggi considera prezzi e regole, ma deve rispettare sempre il calendario.
+**Centro operativo: MessaggiSection**
+La sezione Messaggi è il punto operativo principale.
+Ogni messaggio Subito mostra direttamente: appartamento riconosciuto, disponibilità reale,
+prezzo, risposta suggerita, tasto Copia risposta, tasto Apri Subito, tasto Segna come gestito.
 
-Regola fondamentale:
-se il calendario dice occupato, la risposta non deve mai dire disponibile.
+Flusso semi-automatico attuale:
+1. Messaggio arriva via Make → webhook → agent_inbox
+2. MessaggiSection mostra risposta suggerita
+3. Utente copia risposta → apre Subito → incolla → invia manualmente
+4. Segna come gestito
 
-Prossimo sviluppo funzionale:
-integrare correttamente disponibilità reale e alternative calendario nella risposta.
+**Sezione Agente: chat interna**
+AgentSection è la chat interna dell'app per domande su disponibilità, calendario,
+messaggi, prezzi, stato dell'app. Non è il passaggio obbligatorio per ogni messaggio.
+
+**Pulizia HTML email**
+Il webhook strip HTML dal raw_text e salva html_body in raw_metadata.
+Il filtro noise usa raw_metadata.email_subject (fallback: subject).
+Solo email con subject contenente "Nuovo messaggio" vengono accettate.
+
+## Current Semi-Automatic Flow
+
+Nessun invio automatico, nessuna Gmail reply, nessuna API Subito, nessuna API LLM.
+Il tasto "Rispondi su Subito" apre il link estratto dall'html_body della mail.
+Se il link non è disponibile, mostrare "link Subito non disponibile".

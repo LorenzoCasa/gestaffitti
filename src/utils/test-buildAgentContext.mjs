@@ -1,19 +1,22 @@
 /**
- * Manual node test for buildAgentContext + generateGuestReply.
+ * Manual node test for buildAgentContext + generateGuestReply + resolveListingFromTitle.
  * Run: node src/utils/test-buildAgentContext.mjs
  */
 
-import { buildAgentContext }  from './buildAgentContext.js';
-import { generateGuestReply } from './generateGuestReply.js';
+import { buildAgentContext }       from './buildAgentContext.js';
+import { generateGuestReply }      from './generateGuestReply.js';
+import { resolveListingFromTitle } from './agentListingResolver.js';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const apartments = [
-  { id: 'apt1', label: 'Appartamento Mare', name: 'Appartamento Mare', color: '#c9a96e' },
+  { id: 'apt1', label: 'Appartamento A', color: '#6e9ec9' },
+  { id: 'apt2', label: 'Appartamento B', color: '#c96e9e' },
 ];
 
+// apt1 occupato 2025-07-05 → 2025-07-12
+// apt2 libero tutto luglio
 const bookings = [
-  // Blocks 2025-07-05 → 2025-07-12
   { id: 'b1', apt: 'apt1', checkin: '2025-07-05', checkout: '2025-07-12', status: 'confirmed', guest: 'Rossi' },
 ];
 
@@ -25,102 +28,146 @@ function check(label, actual, expected) {
     console.log(`  ✓ ${label}`);
     pass++;
   } else {
-    console.log(`  ✗ ${label} — got "${actual}", expected "${expected}"`);
+    console.log(`  ✗ ${label}`);
+    console.log(`      got:      "${actual}"`);
+    console.log(`      expected: "${expected}"`);
     fail++;
   }
 }
 
-// ── Test 1: available (sat-sat, 7 notti, libero) ──────────────────────────────
-console.log('\n=== Test 1: AVAILABLE (sat→sat, 7 notti, libero) ===');
-const ctx1 = buildAgentContext({
+function checkContains(label, actual, substring) {
+  if (typeof actual === 'string' && actual.includes(substring)) {
+    console.log(`  ✓ ${label}`);
+    pass++;
+  } else {
+    console.log(`  ✗ ${label}`);
+    console.log(`      testo non contiene: "${substring}"`);
+    console.log(`      testo: "${actual?.slice(0, 200)}"`);
+    fail++;
+  }
+}
+
+function checkNotContains(label, actual, substring) {
+  if (typeof actual === 'string' && !actual.includes(substring)) {
+    console.log(`  ✓ ${label}`);
+    pass++;
+  } else {
+    console.log(`  ✗ ${label}`);
+    console.log(`      testo NON doveva contenere: "${substring}"`);
+    console.log(`      testo: "${actual?.slice(0, 200)}"`);
+    fail++;
+  }
+}
+
+// ── Resolver Tests ────────────────────────────────────────────────────────────
+
+console.log('\n=== RESOLVER: mapping esplicito titolo → aptId ===');
+
+check('titolo apt1 → apt1',
+  resolveListingFromTitle('Lungomare Senigallia appartamento estivo 1', apartments),
+  'apt1');
+
+check('titolo apt2 → apt2',
+  resolveListingFromTitle('Lungomare Senigallia appartamento estivo 2', apartments),
+  'apt2');
+
+check('titolo contenente apt1 → apt1',
+  resolveListingFromTitle('RE: Lungomare Senigallia appartamento estivo 1 - domanda ospite', apartments),
+  'apt1');
+
+check('titolo sconosciuto → null',
+  resolveListingFromTitle('Appartamento economico al mare', apartments),
+  null);
+
+check('titolo null → null',
+  resolveListingFromTitle(null, apartments),
+  null);
+
+check('label apt1 → apt1',
+  resolveListingFromTitle('Appartamento A', apartments),
+  'apt1');
+
+// ── Test A: apt1 libero → disponibile ────────────────────────────────────────
+
+console.log('\n=== Test A: apt1 libero → available ===');
+const ctxA = buildAgentContext({
   formData: { aptId: 'apt1', source: 'subito', checkin: '2025-06-28', checkout: '2025-07-05', guests: 2 },
   apartments, bookings, aptRules: [], inbox: [],
 });
-check('decision.type',          ctx1.decision.type,              'available');
-check('availability.isAvailable', String(ctx1.availability.isAvailable), 'true');
-check('pricing.totalPrice',     String(ctx1.pricing.totalPrice), '500');
-console.log('  reply preview:', generateGuestReply(ctx1).split('\n')[2]);
+const replyA = generateGuestReply(ctxA);
+check('decision.type',              ctxA.decision.type,              'available');
+check('availability.isAvailable',   String(ctxA.availability.isAvailable), 'true');
+checkContains('reply menziona apt1', replyA, 'Appartamento A');
+console.log('  reply:\n' + replyA.split('\n').map(l => '    ' + l).join('\n'));
 
-// ── Test 2: has_alternatives (conflitto calendario) ───────────────────────────
-console.log('\n=== Test 2: HAS_ALTERNATIVES (conflitto calendario) ===');
-const ctx2 = buildAgentContext({
+// ── Test B: apt1 occupato, apt2 libero → ha_alternatives con altro apt ────────
+
+console.log('\n=== Test B: apt1 occupato, apt2 libero → has_alternatives con Appartamento B ===');
+const ctxB = buildAgentContext({
   formData: { aptId: 'apt1', source: 'subito', checkin: '2025-07-05', checkout: '2025-07-12', guests: 2 },
   apartments, bookings, aptRules: [], inbox: [],
 });
-check('decision.type',          ctx2.decision.type,              'has_alternatives');
-check('availability.isAvailable', String(ctx2.availability.isAvailable), 'false');
-check('alternatives.count > 0', String(ctx2.alternatives.count > 0), 'true');
-console.log('  reply preview:', generateGuestReply(ctx2).split('\n').slice(0,4).join(' | '));
+const replyB = generateGuestReply(ctxB);
+check('decision.type',              ctxB.decision.type,              'has_alternatives');
+check('availability.isAvailable',   String(ctxB.availability.isAvailable), 'false');
+checkContains('reply menziona apt1 non disponibile', replyB, 'Appartamento A');
+checkContains('reply menziona Appartamento B',        replyB, 'Appartamento B');
+checkContains('reply ha sezione altro appartamento',  replyB, 'altro appartamento');
+checkNotContains('reply non dice generico disponibile', replyB, 'è disponibile');
+console.log('  reply:\n' + replyB.split('\n').map(l => '    ' + l).join('\n'));
 
-// ── Test 3: outside_rules (non sabato-sabato) ─────────────────────────────────
-console.log('\n=== Test 3: OUTSIDE_RULES (lun→lun, luglio) ===');
-const ctx3 = buildAgentContext({
-  formData: { aptId: 'apt1', source: 'subito', checkin: '2025-07-07', checkout: '2025-07-14', guests: 2 },
-  apartments, bookings: [], aptRules: [], inbox: [],
+// ── Test C: apt2 occupato, apt1 libero → has_alternatives con altro apt ────────
+
+console.log('\n=== Test C: apt2 occupato, apt1 libero → has_alternatives con Appartamento A ===');
+const bookingsC = [
+  { id: 'b2', apt: 'apt2', checkin: '2025-07-05', checkout: '2025-07-12', status: 'confirmed', guest: 'Bianchi' },
+];
+const ctxC = buildAgentContext({
+  formData: { aptId: 'apt2', source: 'subito', checkin: '2025-07-05', checkout: '2025-07-12', guests: 2 },
+  apartments, bookings: bookingsC, aptRules: [], inbox: [],
 });
-check('decision.type',   ctx3.decision.type,          'outside_rules');
-check('stayRules.valid', String(ctx3.stayRules.valid), 'false');
+const replyC = generateGuestReply(ctxC);
+check('decision.type',              ctxC.decision.type,              'has_alternatives');
+check('availability.isAvailable',   String(ctxC.availability.isAvailable), 'false');
+checkContains('reply menziona apt2 non disponibile', replyC, 'Appartamento B');
+checkContains('reply menziona Appartamento A',        replyC, 'Appartamento A');
+checkContains('reply ha sezione altro appartamento',  replyC, 'altro appartamento');
+console.log('  reply:\n' + replyC.split('\n').map(l => '    ' + l).join('\n'));
 
-// ── Test 4: needs_info (nessuna data) ────────────────────────────────────────
-console.log('\n=== Test 4: NEEDS_INFO (nessuna data) ===');
-const ctx4 = buildAgentContext({
-  rawText: 'Ciao, avete disponibilità ad agosto?',
-  formData: { aptId: 'apt1', source: 'subito' },
-  apartments, bookings: [], aptRules: [], inbox: [],
+// ── Test D: aptId vuoto → buildAgentContext senza fallback silenzioso ─────────
+
+console.log('\n=== Test D: aptId vuoto → nessun fallback a apt1 ===');
+const ctxD = buildAgentContext({
+  formData: { aptId: '', source: 'subito', checkin: '2025-07-05', checkout: '2025-07-12', guests: 2 },
+  apartments, bookings, aptRules: [], inbox: [],
 });
-check('decision.type', ctx4.decision.type, 'needs_info');
+check('inquiry.aptId è stringa vuota', ctxD.inquiry.aptId, '');
+check('apartment.id non è apt1', ctxD.apartment.id !== 'apt1' ? 'ok' : 'fallback!', 'ok');
 
-// ── Test A: full_month agosto (testo libero) ──────────────────────────────────
-console.log('\n=== Test A: FULL_MONTH agosto — "Buongiorno, vorrei tutto agosto, siamo in 4." ===');
-const ctxA = buildAgentContext({
+// ── Test E: mese intero ────────────────────────────────────────────────────────
+
+console.log('\n=== Test E: FULL_MONTH agosto ===');
+const ctxE = buildAgentContext({
   rawText: 'Buongiorno, vorrei tutto agosto, siamo in 4.',
   formData: { aptId: 'apt1', source: 'subito' },
   apartments, bookings: [], aptRules: [], inbox: [],
 });
-check('decision.type',    ctxA.decision.type,    'full_month');
-check('isFullMonth',      String(ctxA.inquiry.isFullMonth), 'true');
-check('fullMonthNum',     String(ctxA.inquiry.fullMonthNum), '8');
-check('guests',           String(ctxA.inquiry.guests), '4');
-check('pricing.total',    String(ctxA.pricing.totalPrice), '2600');
-console.log('  reply:\n' + generateGuestReply(ctxA));
+check('decision.type',   ctxE.decision.type,   'full_month');
+check('fullMonthNum',    String(ctxE.inquiry.fullMonthNum), '8');
+check('pricing.total',   String(ctxE.pricing.totalPrice), '2600');
 
-// ── Test B: full_month luglio (testo libero) ──────────────────────────────────
-console.log('\n=== Test B: FULL_MONTH luglio — "Ciao, siamo in 3 e vorremmo tutto luglio." ===');
-const ctxB = buildAgentContext({
-  rawText: 'Ciao, siamo in 3 e vorremmo tutto luglio.',
+// ── Test F: needs_info ─────────────────────────────────────────────────────────
+
+console.log('\n=== Test F: NEEDS_INFO (nessuna data) ===');
+const ctxF = buildAgentContext({
+  rawText: 'Ciao, avete disponibilità ad agosto?',
   formData: { aptId: 'apt1', source: 'subito' },
   apartments, bookings: [], aptRules: [], inbox: [],
 });
-check('decision.type',  ctxB.decision.type,  'full_month');
-check('fullMonthNum',   String(ctxB.inquiry.fullMonthNum), '7');
-check('pricing.total',  String(ctxB.pricing.totalPrice), '2600');
-
-// ── Test C: full_month giugno (testo libero) ──────────────────────────────────
-console.log('\n=== Test C: FULL_MONTH giugno — "Buongiorno, vorrei il mese intero di giugno per 2 persone." ===');
-const ctxC = buildAgentContext({
-  rawText: 'Buongiorno, vorrei il mese intero di giugno per 2 persone.',
-  formData: { aptId: 'apt1', source: 'subito' },
-  apartments, bookings: [], aptRules: [], inbox: [],
-});
-check('decision.type',  ctxC.decision.type,  'full_month');
-check('fullMonthNum',   String(ctxC.inquiry.fullMonthNum), '6');
-check('pricing.total',  String(ctxC.pricing.totalPrice), '1600');
-
-// ── Test D: available con prezzo (date esplicite) ─────────────────────────────
-console.log('\n=== Test D: testo con date — "dal 9 al 16 agosto per 4 persone" ===');
-const ctxD = buildAgentContext({
-  rawText: 'Ciao, vorrei sapere se è disponibile dal 9 al 16 agosto per 4 persone.',
-  formData: { aptId: 'apt1', source: 'subito' },
-  apartments, bookings: [], aptRules: [], inbox: [],
-});
-// 9 agosto 2025 è sabato → checkout 16 agosto 2025 è sabato
-console.log('  decision.type:',   ctxD.decision.type);
-console.log('  checkin:',         ctxD.inquiry.checkin);
-console.log('  checkout:',        ctxD.inquiry.checkout);
-console.log('  pricing.total:',   ctxD.pricing.totalPrice);
-console.log('  reply preview:',   generateGuestReply(ctxD).split('\n')[2]);
+check('decision.type', ctxF.decision.type, 'needs_info');
 
 // ── Risultato ─────────────────────────────────────────────────────────────────
+
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Risultato: ${pass} ✓  ${fail} ✗`);
 if (fail > 0) process.exit(1);

@@ -1,3 +1,11 @@
+// Mapping esplicito: titolo annuncio Subito (lowercase) → aptId nel DB.
+// Priorità massima — sovrascrive qualsiasi word-matching.
+// Aggiungere qui nuovi annunci senza toccare il database.
+const SUBITO_TITLE_MAP = {
+  "lungomare senigallia appartamento estivo 1": "apt1",
+  "lungomare senigallia appartamento estivo 2": "apt2",
+};
+
 // Parole troppo generiche per identificare un appartamento
 const GENERIC = new Set([
   "appartamento","casa","mare","affitto","stanza","camera",
@@ -22,14 +30,21 @@ function distinctiveWords(label) {
  * @returns {string|null}
  */
 export function resolveListingFromTitle(listingTitle, apartments, mappings = null) {
-  if (!listingTitle || !apartments?.length) return null;
+  if (!listingTitle) return null;
 
-  // Futuro: mappings espliciti avranno priorità
+  const title = listingTitle.toLowerCase().trim();
+
+  // Step 0: mapping esplicito (priorità massima)
+  for (const [key, aptId] of Object.entries(SUBITO_TITLE_MAP)) {
+    if (title === key || title.includes(key)) return aptId;
+  }
+
+  // Futuro: mappings dinamici da DB
   if (mappings) {
     // TODO: implementare quando agent_listing_mappings sarà disponibile
   }
 
-  const title = listingTitle.toLowerCase();
+  if (!apartments?.length) return null;
 
   // 1. Match esatto sull'intera label
   for (const apt of apartments) {

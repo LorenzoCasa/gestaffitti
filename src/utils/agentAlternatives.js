@@ -122,36 +122,34 @@ export function findAlternatives({
   const mainApt   = apartments.find(a => a.id === aptId);
   const otherApts = apartments.filter(a => a.id !== aptId && a.id !== 'all');
 
-  // 1. Same apt, sat-sat windows
-  if (isPeak) {
+  // 1. Other apts, same period (highest priority: same dates on a different apt)
+  for (const apt of otherApts) {
+    if (results.length >= maxTotal) break;
+    const avail = checkAvailability(
+      { aptId: apt.id, checkin: requestedCheckin, checkout: requestedCheckout },
+      bookings, { minNights: 1 }
+    );
+    if (avail.available) {
+      const pricing = getSubitoSeasonalPrice({
+        checkin: requestedCheckin, checkout: requestedCheckout,
+        isFullMonth: false, fullMonthNum: null,
+      });
+      results.push({
+        checkin: requestedCheckin, checkout: requestedCheckout,
+        nights: reqNights, aptId: apt.id, aptLabel: apt.label,
+        pricing,
+        label: fmtDate(requestedCheckin) + ' -> ' + fmtDate(requestedCheckout) +
+          ' (' + reqNights + ' notti)',
+      });
+    }
+  }
+
+  // 2. Same apt, sat-sat windows (different dates, same apt)
+  if (isPeak && results.length < maxTotal) {
     for (const c of satCandidates(requestedCheckin, reqNights)) {
       if (results.length >= maxTotal) break;
       const alt = makeAlt(aptId, mainApt?.label ?? '', c.checkin, c.checkout, c.nights, bookings);
       if (alt) results.push(alt);
-    }
-  }
-
-  // 2. Other apts, same period
-  if (results.length < maxTotal) {
-    for (const apt of otherApts) {
-      if (results.length >= maxTotal) break;
-      const avail = checkAvailability(
-        { aptId: apt.id, checkin: requestedCheckin, checkout: requestedCheckout },
-        bookings, { minNights: 1 }
-      );
-      if (avail.available) {
-        const pricing = getSubitoSeasonalPrice({
-          checkin: requestedCheckin, checkout: requestedCheckout,
-          isFullMonth: false, fullMonthNum: null,
-        });
-        results.push({
-          checkin: requestedCheckin, checkout: requestedCheckout,
-          nights: reqNights, aptId: apt.id, aptLabel: apt.label,
-          pricing,
-          label: fmtDate(requestedCheckin) + ' -> ' + fmtDate(requestedCheckout) +
-            ' (' + reqNights + ' notti)',
-        });
-      }
     }
   }
 

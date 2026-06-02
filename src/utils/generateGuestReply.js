@@ -63,24 +63,38 @@ Restiamo a disposizione per qualsiasi informazione.
 Cordiali saluti`;
   },
 
-  unavailable({ inquiry, alternatives }) {
-    const altsBlock = fmtAlternatives(alternatives);
+  unavailable({ inquiry, apartment }) {
     return `Salve,
-la ringraziamo per l'interesse per il nostro appartamento.
-Purtroppo il periodo ${itDate(inquiry.checkin)} – ${itDate(inquiry.checkout)} non è disponibile.${altsBlock}
+la ringraziamo per l'interesse per ${apartment.label}.
+Purtroppo il periodo ${itDate(inquiry.checkin)} – ${itDate(inquiry.checkout)} non è disponibile.
 
 Restiamo a disposizione per altri periodi.
 Cordiali saluti`;
   },
 
-  has_alternatives({ inquiry, alternatives }) {
-    const altsBlock = fmtAlternatives(alternatives);
-    return `Salve,
-la ringraziamo per la sua richiesta.
-Il periodo ${itDate(inquiry.checkin)} – ${itDate(inquiry.checkout)} purtroppo non è libero.${altsBlock}
+  has_alternatives({ inquiry, apartment, alternatives }) {
+    const sameAptAlts  = alternatives.items.filter(a => a.aptId === inquiry.aptId);
+    const otherAptAlts = alternatives.items.filter(a => a.aptId !== inquiry.aptId);
 
-Le interessa una di queste soluzioni?
-Cordiali saluti`;
+    let body = `Il periodo ${itDate(inquiry.checkin)} – ${itDate(inquiry.checkout)} per ${apartment.label} purtroppo non è libero.`;
+
+    if (sameAptAlts.length > 0) {
+      const lines = sameAptAlts.map(a => {
+        const price = a.pricing?.totalPrice != null ? `, €${a.pricing.totalPrice}` : '';
+        return `  📅 ${itDate(a.checkin)} – ${itDate(a.checkout)} (${a.nights} notti${price})`;
+      });
+      body += '\n\nPeriodi alternativi per lo stesso appartamento:\n' + lines.join('\n');
+    }
+
+    if (otherAptAlts.length > 0) {
+      const lines = otherAptAlts.map(a => {
+        const price = a.pricing?.totalPrice != null ? `, €${a.pricing.totalPrice}` : '';
+        return `  📅 ${a.aptLabel}: ${itDate(a.checkin)} – ${itDate(a.checkout)} (${a.nights} notti${price})`;
+      });
+      body += '\n\nIn alternativa possiamo proporle un altro appartamento:\n' + lines.join('\n');
+    }
+
+    return `Salve,\nla ringraziamo per la sua richiesta.\n${body}\n\nLe interessa una di queste soluzioni?\nCordiali saluti`;
   },
 
   outside_rules({ inquiry, stayRules }) {

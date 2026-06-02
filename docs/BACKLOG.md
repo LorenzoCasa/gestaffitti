@@ -1,126 +1,89 @@
 # GestAffitti Backlog
 
-## Sprint attuale — Subito Auto Reply MVP
+## Completato
 
-### 1. Consolidare rentalAgentOrchestrator.js
+### ✅ Orchestratore rentalAgentOrchestrator.js
+Parser → risolve appartamento → stay rules → prezzo → disponibilità → alternative → risposta.
 
-Creare un orchestratore centrale che riceve:
-- rawText
-- rawMetadata
-- apartments
-- bookings
-- aptRules
+### ✅ Priorità calendario nella risposta
+Se il calendario dice occupato, la risposta non dice mai disponibile.
 
-E restituisce:
-- parsed
-- resolvedApartment
-- stayRuleResult
-- seasonalPrice
-- availabilityResult
-- alternatives
-- responseContext
-- suggestedResponse
+### ✅ Alternative reali (agentAlternatives.js)
+Priorità: altro apt stesso periodo → stesso apt date alternative → altro apt date alternative.
+Ogni alternativa verificata sul calendario. Massimo 3.
 
-Obiettivo: spostare logica fuori da AgentSection.
+### ✅ Alternative distinte nella risposta
+Sezione separata "In alternativa possiamo proporle un altro appartamento" con nome esplicito.
 
-### 2. Correggere priorità calendario nella risposta
+### ✅ Mapping appartamenti Subito
+apt1 = Appartamento A = "Lungomare Senigallia appartamento estivo 1"
+apt2 = Appartamento B = "Lungomare Senigallia appartamento estivo 2"
+Nessun fallback silenzioso al primo appartamento.
 
-La risposta deve rispettare sempre la disponibilità reale.
+### ✅ Pulizia HTML email / filtro noise
+Webhook strip HTML, salva html_body in raw_metadata.
+Filtro: solo email con subject "Nuovo messaggio" vengono accettate.
 
-Se il calendario dice non disponibile:
-- non dire disponibile
-- proporre alternative se esistono
-- altrimenti chiedere se il cliente valuta altri periodi
+### ✅ MessaggiSection base
+Sezione Messaggi con lista inbox, badge stato, testo pulito.
 
-### 3. Completare agentAlternatives.js
+---
 
-Implementare alternative reali:
-- stesso appartamento stesso periodo
-- stesso appartamento date alternative sabato-sabato
-- altro appartamento stesso periodo
-- altro appartamento date alternative sabato-sabato
-- massimo 3 alternative totali
-- usare calendario reale
+## Sprint attuale — MessaggiSection come centro operativo
 
-### 4. Integrare alternative nella risposta suggerita
+### 1. MessaggiSection: card completa con analisi e azioni
 
-La risposta deve proporre solo alternative coerenti:
-- compatibili con regole soggiorno
-- compatibili con calendario
-- con prezzo corretto
-
-### 5. Ridurre logica dentro AgentSection
-
-AgentSection deve:
-- ricevere input
-- chiamare orchestrator
-- mostrare risultato
-- salvare decisione
-
-Non deve contenere tutta la logica agente.
-
-### 6. Salvare dati per apprendimento futuro
-
-Già avviato:
-- suggested_text
-- response_text
-- was_modified
-- outcome
-
-Prossimo:
-- verificare salvataggio completo
-- outcome booking_made / rejected / no_response
-- usare questi dati per futuro LLM
-
-### 7. Creare sezione Messaggi
-
-Sezione separata con:
-- tutti i messaggi arrivati
-- source
-- contatto
-- appartamento
-- periodo
-- stato
+Ogni messaggio Subito deve mostrare:
+- testo cliente pulito (no HTML)
+- appartamento riconosciuto (da listing_title)
+- periodo e ospiti se estratti
+- disponibilità reale sul calendario corretto
+- prezzo
 - risposta suggerita
-- risposta approvata
-- esito
+- pulsante Copia risposta
+- pulsante Apri Subito (se link disponibile)
+- pulsante Segna come gestito
 
-### 8. Creare Contatti/Lead
+Tab: Nuovi / Già gestiti
 
-Struttura futura:
-- nome
-- telefono/email se disponibili
-- source
-- richieste passate
-- appartamento richiesto
-- tag
-- do_not_contact
-- marketing_consent futuro
-- last_contacted_at
+### 2. Link "Apri Subito"
 
-### 9. Context builder per futuro LLM
+Estrarre link dalla mail (raw_metadata.html_body).
+Se disponibile → tasto attivo.
+Se non disponibile → "link Subito non disponibile".
+Futura integrazione Make: aggiungere raw_metadata.subito_url come campo diretto.
 
-Creare context strutturato per futuro LLM:
-- messaggio cliente
-- dati estratti
-- appartamento
-- dotazioni
-- disponibilità
-- prezzi
-- regole soggiorno
-- alternative
-- storico decisioni approvate
+### 3. Sezione Agente → chat interna
 
-### 10. Solo dopo: valutare LLM verticale GestAffitti
+AgentSection diventa chat interna per domande su disponibilità, calendario, messaggi, prezzi.
+Non è più il passaggio obbligatorio per ogni messaggio.
+Default: tab Chat.
 
-Il LLM deve:
-- generare testo naturale
-- usare solo dati forniti dal context
-- non inventare prezzi/disponibilità
-- non inviare senza approvazione
+---
+
+## Prossimo sprint
+
+### 4. Salvare dati per apprendimento futuro
+
+- verificare salvataggio completo suggested_text / response_text / was_modified
+- outcome: booking_made / rejected / no_response
+- usare per futuro LLM
+
+### 5. Creare Contatti/Lead
+
+- nome, telefono/email se disponibili, source
+- richieste passate, appartamento richiesto, tag
+- do_not_contact, marketing_consent futuro, last_contacted_at
+
+### 6. Context builder per futuro LLM
+
+Struttura per futuro LLM: messaggio cliente, dati estratti, appartamento, dotazioni,
+disponibilità, prezzi, regole soggiorno, alternative, storico decisioni approvate.
+
+### 7. Solo dopo: valutare LLM verticale GestAffitti
 
 Non implementare LLM prima di avere:
-- orchestrator stabile
-- messaggi strutturati
-- alternative reali
+- orchestrator stabile ✅
+- messaggi strutturati ✅
+- alternative reali ✅
 - salvataggio decisioni completo

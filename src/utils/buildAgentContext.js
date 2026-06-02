@@ -72,7 +72,7 @@ export function buildAgentContext({
   const parsed = parseAgentInquiry(rawText, rawMetadata);
 
   // 2. Merge: formData fields win, parser fills gaps
-  const aptId        = formData.aptId       || realApts[0]?.id || '';
+  const aptId        = formData.aptId       || '';
   const source       = formData.source      || rawMetadata?.source || 'subito';
   const checkin      = formData.checkin     || parsed.checkin    || null;
   const checkout     = formData.checkout    || parsed.checkout   || null;

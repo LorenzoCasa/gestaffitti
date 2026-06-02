@@ -10,7 +10,7 @@ import AgentChat from "../../agent/AgentChat";
 
 export default function AgentSection({ apartments, bookings, user }) {
   const realApts = apartments.filter(a => a.id !== "all");
-  const [mode, setMode] = useState("analisi");
+  const [mode, setMode] = useState("chat");
 
   const {
     aptRules,
@@ -31,14 +31,21 @@ export default function AgentSection({ apartments, bookings, user }) {
   const [selectedInboxItem,     setSelectedInboxItem]     = useState(null);
   const [parserResult,          setParserResult]          = useState(null);
   const [composerInitialValues, setComposerInitialValues] = useState(null);
+  const [listingWarning,        setListingWarning]        = useState(null);
 
   function handleLoadFromInbox(item) {
     setSelectedInboxItem(item);
     setDecision(null);
     setSaved(false);
     setInboxId(null);
-    const parsed = parseAgentInquiry(item.raw_text ?? "", item.raw_metadata ?? {});
-    const aptId  = resolveListingFromTitle(item.raw_metadata?.listing_title, realApts) ?? realApts[0]?.id ?? "";
+    setListingWarning(null);
+    const parsed       = parseAgentInquiry(item.raw_text ?? "", item.raw_metadata ?? {});
+    const listingTitle = item.raw_metadata?.listing_title ?? null;
+    const resolvedAptId = resolveListingFromTitle(listingTitle, realApts);
+    if (listingTitle && !resolvedAptId) {
+      setListingWarning(`Annuncio non riconosciuto: "${listingTitle}". Seleziona l'appartamento manualmente.`);
+    }
+    const aptId = resolvedAptId ?? "";
     setParserResult(parsed);
     setComposerInitialValues({
       rawText:      item.raw_text       ?? "",
@@ -143,7 +150,7 @@ export default function AgentSection({ apartments, bookings, user }) {
   return (
     <div>
       <h2 style={{ fontFamily: "'Playfair Display',serif", color: "#c9a96e", fontSize: "1.2rem", marginBottom: "0.6rem", marginTop: "0.4rem" }}>
-        🤖 Agente Richieste
+        🤖 Agente Interno
       </h2>
 
       <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.9rem" }}>
@@ -181,6 +188,11 @@ export default function AgentSection({ apartments, bookings, user }) {
           ) : (
             <>
               <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
+              {listingWarning && (
+                <div style={{ background: "rgba(201,110,110,0.08)", border: "1px solid #c96e6e55", borderRadius: "8px", padding: "0.55rem 0.75rem", marginBottom: "0.7rem", fontSize: "0.73rem", color: "#c96e6e" }}>
+                  ⚠️ {listingWarning}
+                </div>
+              )}
               {parserResult && (
                 <div style={{ background: "#0d0a07", border: "1px solid #2a2010", borderRadius: "10px", padding: "0.65rem 0.9rem", marginBottom: "0.7rem", fontSize: "0.73rem" }}>
                   <div style={{ color: "#8a7a60", fontFamily: "'Playfair Display',serif", marginBottom: "0.3rem" }}>🧠 Parser</div>

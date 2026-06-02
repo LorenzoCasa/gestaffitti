@@ -299,7 +299,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 
         {/* MESSAGGI */}
         {section==="messaggi"&&(
-          <MessaggiSection user={user} apartments={apartments}/>
+          <MessaggiSection user={user} apartments={apartments} bookings={bookings}/>
         )}
 
         {/* IMPOSTAZIONI */}
