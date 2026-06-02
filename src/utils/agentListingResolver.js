@@ -21,10 +21,28 @@ function distinctiveWords(label) {
 }
 
 /**
- * Risolve l'appartamento dal titolo annuncio (raw_metadata.listing_title).
- * Restituisce aptId se sicuro, null se non lo è.
+ * Estrae il miglior candidato per il titolo annuncio da raw_metadata.
+ * Prova in ordine: listing_title → email_subject → subject.
+ * NON usa raw_text: è il corpo del messaggio cliente, non il titolo annuncio.
  *
- * @param {string|null} listingTitle  — raw_metadata.listing_title
+ * @param {object|null} rawMetadata
+ * @returns {string|null}
+ */
+export function extractListingTitle(rawMetadata) {
+  if (!rawMetadata) return null;
+  return (
+    rawMetadata.listing_title ||
+    rawMetadata.email_subject ||
+    rawMetadata.subject ||
+    null
+  ) || null;
+}
+
+/**
+ * Risolve l'appartamento dal titolo annuncio.
+ * Restituisce aptId se sicuro, null se non riconosciuto.
+ *
+ * @param {string|null} listingTitle
  * @param {Array<{id:string, label:string}>} apartments
  * @param {object|null} mappings  — futuro: { listingId → aptId }
  * @returns {string|null}

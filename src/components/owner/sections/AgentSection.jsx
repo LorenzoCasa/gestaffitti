@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { parseAgentInquiry }    from "../../../utils/agentParser";
-import { resolveListingFromTitle } from "../../../utils/agentListingResolver";
+import { resolveListingFromTitle, extractListingTitle } from "../../../utils/agentListingResolver";
 import { runRentalAgent }        from "../../../utils/rentalAgentOrchestrator";
 import useAgentData from "../../../hooks/useAgentData";
 import MessageComposer from "../../agent/MessageComposer";
@@ -39,11 +39,11 @@ export default function AgentSection({ apartments, bookings, user }) {
     setSaved(false);
     setInboxId(null);
     setListingWarning(null);
-    const parsed       = parseAgentInquiry(item.raw_text ?? "", item.raw_metadata ?? {});
-    const listingTitle = item.raw_metadata?.listing_title ?? null;
-    const resolvedAptId = resolveListingFromTitle(listingTitle, realApts);
-    if (listingTitle && !resolvedAptId) {
-      setListingWarning(`Annuncio non riconosciuto: "${listingTitle}". Seleziona l'appartamento manualmente.`);
+    const parsed        = parseAgentInquiry(item.raw_text ?? "", item.raw_metadata ?? {});
+    const candidateTitle = extractListingTitle(item.raw_metadata ?? {});
+    const resolvedAptId  = resolveListingFromTitle(candidateTitle, realApts);
+    if (candidateTitle && !resolvedAptId) {
+      setListingWarning(`Annuncio non riconosciuto: "${candidateTitle}". Seleziona l'appartamento manualmente.`);
     }
     const aptId = resolvedAptId ?? "";
     setParserResult(parsed);

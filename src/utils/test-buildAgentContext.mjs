@@ -3,9 +3,9 @@
  * Run: node src/utils/test-buildAgentContext.mjs
  */
 
-import { buildAgentContext }       from './buildAgentContext.js';
-import { generateGuestReply }      from './generateGuestReply.js';
-import { resolveListingFromTitle } from './agentListingResolver.js';
+import { buildAgentContext }                        from './buildAgentContext.js';
+import { generateGuestReply }                       from './generateGuestReply.js';
+import { resolveListingFromTitle, extractListingTitle } from './agentListingResolver.js';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +86,49 @@ check('titolo null → null',
 check('label apt1 → apt1',
   resolveListingFromTitle('Appartamento A', apartments),
   'apt1');
+
+// ── extractListingTitle: priorità campi raw_metadata ─────────────────────────
+
+console.log('\n=== extractListingTitle: priorità campi raw_metadata ===');
+
+check('listing_title ha priorità su email_subject',
+  extractListingTitle({ listing_title: 'Lungomare Senigallia appartamento estivo 1', email_subject: 'Altro' }),
+  'Lungomare Senigallia appartamento estivo 1');
+
+check('email_subject usato se listing_title assente',
+  extractListingTitle({ email_subject: 'Lungomare Senigallia appartamento estivo 2' }),
+  'Lungomare Senigallia appartamento estivo 2');
+
+check('subject come fallback finale',
+  extractListingTitle({ subject: 'Lungomare Senigallia appartamento estivo 1' }),
+  'Lungomare Senigallia appartamento estivo 1');
+
+check('null se tutti assenti',
+  extractListingTitle({}),
+  null);
+
+check('null se rawMetadata è null',
+  extractListingTitle(null),
+  null);
+
+// ── Integrazione Make reale ───────────────────────────────────────────────────
+
+console.log('\n=== Integrazione Make: email_subject → apt ===');
+
+const metaMake1 = { email_subject: 'Lungomare Senigallia appartamento estivo 1', email_from: 'noreply@subito.it' };
+check('Make email_subject → apt1',
+  resolveListingFromTitle(extractListingTitle(metaMake1), apartments),
+  'apt1');
+
+const metaMake2 = { email_subject: 'Lungomare Senigallia appartamento estivo 2' };
+check('Make email_subject → apt2',
+  resolveListingFromTitle(extractListingTitle(metaMake2), apartments),
+  'apt2');
+
+const metaUnknown = { email_subject: 'Annuncio approvato' };
+check('email non cliente → null',
+  resolveListingFromTitle(extractListingTitle(metaUnknown), apartments),
+  null);
 
 // ── Test A: apt1 libero → disponibile ────────────────────────────────────────
 

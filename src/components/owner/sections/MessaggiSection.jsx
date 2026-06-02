@@ -1,7 +1,7 @@
 import { useState } from "react";
 import useAgentData from "../../../hooks/useAgentData";
 import { stripHtml, looksLikeHtml, extractSubitoLink } from "../../../utils/stripHtml";
-import { resolveListingFromTitle } from "../../../utils/agentListingResolver";
+import { resolveListingFromTitle, extractListingTitle } from "../../../utils/agentListingResolver";
 import { buildAgentContext } from "../../../utils/buildAgentContext";
 import { generateGuestReply } from "../../../utils/generateGuestReply";
 
@@ -52,13 +52,14 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
     ? stripHtml(item.raw_text)
     : (item.raw_text ?? "");
 
+  const candidateTitle = extractListingTitle(item.raw_metadata);
   const aptId =
-    resolveListingFromTitle(item.raw_metadata?.listing_title, realApts) ??
+    resolveListingFromTitle(candidateTitle, realApts) ??
     item.apt_id ??
     item.parsed_apt_id ??
     "";
 
-  const unrecognized = !aptId && !!(item.raw_metadata?.listing_title || cleanText);
+  const unrecognized = !aptId && !!candidateTitle;
 
   let context = null;
   try {
