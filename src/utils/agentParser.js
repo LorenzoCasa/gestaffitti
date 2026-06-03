@@ -166,6 +166,57 @@ function extractQuestions(text) {
     .filter(s => s.includes("?"));
 }
 
+// ── Flexible period extraction ────────────────────────────────────────────────
+// Extracts month/week intent when no specific dates are present.
+// Non-breaking: called only when checkin/checkout are null.
+
+const NUM_WORDS = { 'una': 1, 'un': 1, 'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4 };
+
+function extractFlexiblePeriod(text) {
+  const t = text.toLowerCase();
+
+  // 1. Requested month — uses MONTH_NAMES_IT (sorted longest-first, avoids "ago"→"agosto" collision)
+  let requestedMonth = null;
+  const monthRe = new RegExp('\\b(' + MONTH_NAMES_IT + ')\\b', 'i');
+  const monthM  = t.match(monthRe);
+  if (monthM) requestedMonth = MONTHS_IT[monthM[1].toLowerCase()] ?? null;
+
+  // 2. Requested weeks/nights
+  let requestedWeeks = null;
+  const weeksM = t.match(/\b(una|un|uno|due|tre|quattro|1|2|3|4)\s+settiman[ae]\b/i);
+  if (weeksM) {
+    const raw = weeksM[1].toLowerCase();
+    requestedWeeks = NUM_WORDS[raw] ?? (parseInt(raw, 10) || null);
+  }
+
+  // 3. Week position — check multi-week patterns BEFORE single-week to avoid partial match
+  let requestedWeekPosition = null;
+  if (/\bprim[ae]\s+(due|2)\s+settiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'first_two';
+  } else if (/\bultim[ae]\s+(due|2)\s+settiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'last_two';
+  } else if (/\bprim[ae]\b/i.test(t) && /\bsettiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'first';
+  } else if (/\bsecond[ae]\b/i.test(t) && /\bsettiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'second';
+  } else if (/\bterz[ae]\b/i.test(t) && /\bsettiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'third';
+  } else if (/\bultim[ae]\b/i.test(t) && /\bsettiman[ae]\b/i.test(t)) {
+    requestedWeekPosition = 'last';
+  }
+
+  // When position implies one or two weeks but no explicit number was given, infer it
+  if (requestedWeekPosition && !requestedWeeks) {
+    requestedWeeks = (requestedWeekPosition === 'first_two' || requestedWeekPosition === 'last_two') ? 2 : 1;
+  }
+  const requestedNights = requestedWeeks ? requestedWeeks * 7 : null;
+
+  // isFlexibleDatesRequest: true when the client named a month without giving exact dates
+  const isFlexibleDatesRequest = !!requestedMonth;
+
+  return { requestedMonth, requestedWeeks, requestedNights, requestedWeekPosition, isFlexibleDatesRequest };
+}
+
 export function parseAgentInquiry(rawText, rawMetadata = {}) {
   const text = rawText || "";
   const _fm = detectFullMonth(text);
@@ -176,8 +227,13 @@ export function parseAgentInquiry(rawText, rawMetadata = {}) {
     checkin  = _dates.checkin;
     checkout = _dates.checkout;
   }
-  const guests   = extractGuests(text);
+  const guests    = extractGuests(text);
   const questions = extractQuestions(text);
+
+  // Extract flexible period fields only when no specific dates were found
+  const flex = (!_fm && !checkin && !checkout)
+    ? extractFlexiblePeriod(text)
+    : { requestedMonth: null, requestedWeeks: null, requestedNights: null, requestedWeekPosition: null, isFlexibleDatesRequest: false };
 
   const missingFields = [];
   if (!checkin  && !_fm) missingFields.push("checkin");
@@ -196,6 +252,12 @@ export function parseAgentInquiry(rawText, rawMetadata = {}) {
     warnings: [],
     isFullMonth:  _fm?.isFullMonth  ?? false,
     fullMonthNum: _fm?.fullMonthNum ?? null,
+    // Flexible period fields (non-breaking additions)
+    requestedMonth:         flex.requestedMonth,
+    requestedWeeks:         flex.requestedWeeks,
+    requestedNights:        flex.requestedNights,
+    requestedWeekPosition:  flex.requestedWeekPosition,
+    isFlexibleDatesRequest: flex.isFlexibleDatesRequest,
     rawMetadata,
   };
 }

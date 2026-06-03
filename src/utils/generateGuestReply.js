@@ -120,7 +120,69 @@ Possiamo valutare la sua offerta: mi faccia sapere se vuole procedere o se ha al
 Cordiali saluti`;
   },
 
-  needs_info({ inquiry }) {
+  needs_info({ inquiry, apartment }) {
+    const {
+      requestedMonth, requestedNights, requestedWeekPosition,
+      isFlexibleDatesRequest, monthWindows,
+    } = inquiry;
+
+    // ── Caso A: mese noto + finestre trovate ──────────────────────────────────
+    if (isFlexibleDatesRequest && requestedMonth && requestedNights && monthWindows?.length > 0) {
+      const monthName   = itMonth(requestedMonth);
+      const nightsLabel = requestedNights === 7  ? 'una settimana'
+                        : requestedNights === 14 ? 'due settimane'
+                        : requestedNights === 21 ? 'tre settimane'
+                        : `${requestedNights} notti`;
+      const aptLine = apartment?.label ? ` per ${apartment.label}` : '';
+      const lines = monthWindows.map(w => {
+        const price = w.pricing?.totalPrice != null ? `, €${w.pricing.totalPrice}` : '';
+        return `  📅 ${itDate(w.checkin)} – ${itDate(w.checkout)} (${w.nights} notti${price})`;
+      });
+      return `Salve,
+grazie per la sua richiesta${aptLine}!
+
+Per ${nightsLabel} in ${monthName} abbiamo queste disponibilità:
+
+${lines.join('\n')}
+
+Le interessa uno di questi periodi? Restiamo a disposizione.
+Cordiali saluti`;
+    }
+
+    // ── Caso B: mese noto + finestre cercate ma nessuna libera ───────────────
+    if (isFlexibleDatesRequest && requestedMonth && requestedNights && monthWindows !== null && monthWindows.length === 0) {
+      const monthName   = itMonth(requestedMonth);
+      const nightsLabel = requestedNights === 7  ? 'una settimana'
+                        : requestedNights === 14 ? 'due settimane'
+                        : requestedNights === 21 ? 'tre settimane'
+                        : `${requestedNights} notti`;
+      const aptLine = apartment?.label ? ` per ${apartment.label}` : '';
+      return `Salve,
+grazie per la sua richiesta.
+Purtroppo per ${monthName} (${nightsLabel}) non risultano disponibilità${aptLine}.
+
+Può valutare altri periodi o settimane diverse? Restiamo a disposizione.
+Cordiali saluti`;
+    }
+
+    // ── Caso C: mese noto ma durata non specificata (es. "disponibilità ad agosto?") ──
+    if (isFlexibleDatesRequest && requestedMonth) {
+      const monthName = itMonth(requestedMonth);
+      const aptLine   = apartment?.label ? ` per ${apartment.label}` : '';
+      return `Salve,
+grazie per la sua richiesta${aptLine}!
+
+Per verificare la disponibilità in ${monthName} può indicarci:
+– il periodo preferito (es. prima o seconda settimana)
+– il numero di settimane
+– numero di ospiti previsto
+
+Lavoriamo principalmente con soggiorni da sabato a sabato (7, 14 o 21 notti).
+Restiamo a disposizione.
+Cordiali saluti`;
+    }
+
+    // ── Caso D: standard needs_info (nessun mese riconosciuto) ───────────────
     const extra = inquiry.missingFields?.length
       ? `\nIn particolare ci mancano: ${inquiry.missingFields.join(', ')}.`
       : '';

@@ -2,7 +2,13 @@ import { parseAgentInquiry }      from './agentParser.js';
 import { checkAvailability }       from './agentAvailability.js';
 import { checkStayRules }          from './agentStayRules.js';
 import { getSubitoSeasonalPrice }  from './agentSeasonalRates.js';
-import { findAlternatives }        from './agentAlternatives.js';
+import { findAlternatives, findWindowsInMonth } from './agentAlternatives.js';
+
+function inferYearForMonth(month) {
+  const now = new Date();
+  const cur = now.getMonth() + 1;
+  return month < cur ? now.getFullYear() + 1 : now.getFullYear();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,12 +89,35 @@ export function buildAgentContext({
   const isFullMonth  = formData.isFullMonth  || parsed.isFullMonth  || false;
   const fullMonthNum = formData.fullMonthNum || parsed.fullMonthNum || null;
 
+  // Flexible period fields from parser (only populated when no specific dates found)
+  const requestedMonth        = parsed.requestedMonth        ?? null;
+  const requestedNights       = parsed.requestedNights       ?? null;
+  const requestedWeekPosition = parsed.requestedWeekPosition ?? null;
+  const isFlexibleDatesRequest = parsed.isFlexibleDatesRequest ?? false;
+
   // Missing fields: dates not required for full-month requests
   const effectiveMissingFields = [
     ...(!checkin  && !isFullMonth ? ['checkin']  : []),
     ...(!checkout && !isFullMonth ? ['checkout'] : []),
     ...(!guests                   ? ['guests']   : []),
   ];
+
+  // Calendar-verified windows in the requested month (null = not searched)
+  const VALID_NIGHTS_SET = new Set([7, 14, 21]);
+  let monthWindows = null;
+  if (isFlexibleDatesRequest && aptId && requestedMonth && requestedNights && VALID_NIGHTS_SET.has(requestedNights)) {
+    const apt = realApts.find(a => a.id === aptId);
+    monthWindows = findWindowsInMonth({
+      aptId,
+      aptLabel:  apt?.label ?? '',
+      month:     requestedMonth,
+      nights:    requestedNights,
+      bookings,
+      year:      inferYearForMonth(requestedMonth),
+      position:  requestedWeekPosition,
+      maxTotal:  3,
+    });
+  }
 
   const inquiry = {
     rawText,
@@ -102,6 +131,12 @@ export function buildAgentContext({
     fullMonthNum,
     missingFields: effectiveMissingFields,
     warnings:      parsed.warnings ?? [],
+    // Flexible period (new, non-breaking)
+    requestedMonth,
+    requestedNights,
+    requestedWeekPosition,
+    isFlexibleDatesRequest,
+    monthWindows,
   };
 
   // 3. Apartment info

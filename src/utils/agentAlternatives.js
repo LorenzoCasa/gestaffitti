@@ -104,6 +104,53 @@ function makeAlt(aptId, aptLabel, checkin, checkout, nights, bookings) {
  * }} options
  * @returns {Array<{checkin, checkout, nights, aptId, aptLabel, pricing, label}>}
  */
+/**
+ * Find available sat-sat windows of `nights` duration in a given month.
+ * Used when the client says "due settimane di agosto" without specific dates.
+ * Every window is calendar-verified before being returned.
+ *
+ * @param {{ aptId, aptLabel, month, nights, bookings, year, position?, maxTotal? }}
+ * @returns {Array}
+ */
+export function findWindowsInMonth({
+  aptId, aptLabel, month, nights, bookings = [], year, position = null, maxTotal = 3,
+}) {
+  if (!aptId || !month || !VALID_NIGHTS.includes(nights)) return [];
+
+  const monthStr   = String(month).padStart(2, '0');
+  const monthStart = `${year}-${monthStr}-01`;
+
+  // Collect all Saturdays whose checkin falls within the month
+  let d = nextSatOnOrAfter(monthStart);
+  const candidates = [];
+  while (monthOf(d) === month) {
+    candidates.push(d);
+    d = addDays(d, 7);
+  }
+  if (candidates.length === 0) return [];
+
+  // Reorder based on position hint (position is a hint, not a hard filter)
+  let ordered;
+  if (position === 'last' || position === 'last_two') {
+    ordered = [...candidates].reverse();
+  } else if (position === 'second') {
+    ordered = candidates.slice(1);   // skip first Saturday
+  } else if (position === 'third') {
+    ordered = candidates.slice(2);   // skip first two
+  } else {
+    ordered = candidates;            // first, first_two, or none → natural chronological
+  }
+
+  const results = [];
+  for (const sat of ordered) {
+    if (results.length >= maxTotal) break;
+    const checkout = addDays(sat, nights);
+    const alt = makeAlt(aptId, aptLabel, sat, checkout, nights, bookings);
+    if (alt) results.push(alt);
+  }
+  return results;
+}
+
 export function findAlternatives({
   aptId,
   requestedCheckin,
