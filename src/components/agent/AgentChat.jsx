@@ -35,7 +35,7 @@ export default function AgentChat({
 
   const [selectedApt, setSelectedApt] = useState(realApts[0]?.id ?? "");
   const [messages, setMessages] = useState([
-    { role: "agent", text: "Ciao! Sono l'agente GestAffitti. Scrivi una richiesta e analizzerò disponibilità, prezzi e regole di soggiorno." },
+    { role: "agent", text: "Ciao! Sono l'agente interno di GestAffitti.\n\nPosso analizzare richieste di soggiorno: disponibilità sul calendario, prezzi stagionali, regole sabato-sabato e alternative.\n\nIncolla qui il testo di un messaggio cliente per vedere la risposta suggerita, oppure scrivi una richiesta di prova." },
   ]);
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);

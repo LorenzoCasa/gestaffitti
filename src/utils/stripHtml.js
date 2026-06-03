@@ -23,24 +23,38 @@ export function stripHtml(html) {
  * Checks direct fields first, then scans html_body for subito.it hrefs.
  * Returns null if no link found.
  */
-export function extractSubitoLink(rawMetadata) {
+const SUBITO_MSG_RE = /href="(https?:\/\/(?:www\.)?subito\.it\/(?:messaggi|my-messages|il-mio-profilo\/messaggi)[^"]*)"/i;
+const SUBITO_ANY_RE = /href="(https?:\/\/(?:www\.)?subito\.it\/[^"]{10,})"/i;
+const SUBITO_URL_RE = /https?:\/\/(?:www\.)?subito\.it\/(?:messaggi|my-messages|il-mio-profilo\/messaggi)\S+/i;
+
+function extractFromHtml(html) {
+  if (!html) return null;
+  const m = html.match(SUBITO_MSG_RE) ?? html.match(SUBITO_ANY_RE);
+  return m ? m[1] : null;
+}
+
+/**
+ * Extracts the Subito reply/conversation link from raw_metadata (and optionally raw_text).
+ * Priority: direct fields → html_body → email_html_body → raw_text plain URL.
+ * Returns null if no link found.
+ */
+export function extractSubitoLink(rawMetadata, rawText) {
   if (!rawMetadata) return null;
 
-  // Direct fields (future Make integration)
+  // Direct fields (Make can send these explicitly)
   if (rawMetadata.subito_url) return rawMetadata.subito_url;
   if (rawMetadata.reply_url)  return rawMetadata.reply_url;
 
-  // Extract from html_body: prefer links to messaggi/conversazione paths
-  const html = rawMetadata.html_body;
-  if (!html) return null;
+  // HTML body variants (webhook saves as html_body; Make might use email_html_body)
+  const fromHtml = extractFromHtml(rawMetadata.html_body)
+                ?? extractFromHtml(rawMetadata.email_html_body);
+  if (fromHtml) return fromHtml;
 
-  // Try message/conversation specific links first
-  const msgMatch = html.match(/href="(https?:\/\/(?:www\.)?subito\.it\/(?:messaggi|my-messages|il-mio-profilo\/messaggi)[^"]*)"/i);
-  if (msgMatch) return msgMatch[1];
-
-  // Fallback: any subito.it link that isn't an image or tracking pixel
-  const anyMatch = html.match(/href="(https?:\/\/(?:www\.)?subito\.it\/[^"]{10,})"/i);
-  if (anyMatch) return anyMatch[1];
+  // Last resort: scan raw_text for a plain Subito message URL
+  if (rawText) {
+    const m = rawText.match(SUBITO_URL_RE);
+    if (m) return m[0];
+  }
 
   return null;
 }

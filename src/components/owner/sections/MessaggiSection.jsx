@@ -82,7 +82,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
   }
 
   const responseText  = context ? generateGuestReply(context) : null;
-  const subitoLink    = extractSubitoLink(item.raw_metadata);
+  const subitoLink    = extractSubitoLink(item.raw_metadata, cleanText);
   const apt           = realApts.find(a => a.id === aptId);
   const color         = STATUS_COLORS[item.status] ?? "#c9a96e";
   const isNew         = ["new", "processing"].includes(item.status);
@@ -172,7 +172,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           fontSize: "0.75rem", color: "#c0a870", lineHeight: "1.5",
           background: "#0d0a07", borderRadius: "7px", padding: "0.4rem 0.6rem",
           marginBottom: "0.4rem",
-          maxHeight: expanded ? "none" : "3.6rem",
+          maxHeight: expanded ? "none" : "2.8rem",
           overflow: "hidden",
           whiteSpace: "pre-wrap",
         }}>
@@ -180,13 +180,15 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
         </div>
       ) : null}
 
-      {/* ── Risposta suggerita (visibile solo se expanded) ── */}
-      {responseText && expanded && (
+      {/* ── Risposta suggerita — sempre visibile, collassata ── */}
+      {responseText && (
         <div style={{
           fontSize: "0.72rem", color: "#90c890", lineHeight: "1.5",
           background: "#0a120a", border: "1px solid #2a4a2a33",
           borderRadius: "7px", padding: "0.5rem 0.65rem", marginBottom: "0.4rem",
           whiteSpace: "pre-wrap",
+          maxHeight: expanded ? "none" : "5.5rem",
+          overflow: "hidden",
         }}>
           <div style={{ fontSize: "0.58rem", color: "#4a7a4a", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.3rem", fontFamily: "'Playfair Display',serif" }}>
             Risposta suggerita

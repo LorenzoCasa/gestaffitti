@@ -85,10 +85,9 @@ Puoi lavorare in autonomia su:
 - lettura file
 - analisi tecnica
 - piano breve
-- modifiche codice dentro lo scope approvato
+- modifiche codice dentro lo scope approvato (lo scope esplicito dell'utente sovrascrive il limite di 3 file)
 - creazione utility in src/utils
 - correzione errori build
-- refactoring locale dentro massimo 3 file
 - esecuzione npm run build
 - test node locali
 - riepilogo finale
@@ -101,10 +100,9 @@ Devi fermarti e chiedere conferma prima di:
 - introdurre API esterne
 - collegare LLM
 - modificare autenticazione o sicurezza
-- modificare Edge Function già funzionanti
+- modificare Edge Function già funzionanti senza indicazione esplicita
 - cambiare architettura generale
-- modificare più di 3 file applicativi principali
-- superare lo scope iniziale
+- superare lo scope esplicitamente approvato
 - fare commit
 - fare push
 - fare deploy
@@ -196,3 +194,49 @@ Solo email con subject contenente "Nuovo messaggio" vengono accettate.
 Nessun invio automatico, nessuna Gmail reply, nessuna API Subito, nessuna API LLM.
 Il tasto "Rispondi su Subito" apre il link estratto dall'html_body della mail.
 Se il link non è disponibile, mostrare "link Subito non disponibile".
+
+Flusso MVP attuale:
+1. Messaggio Subito arriva via Make → Gmail → Edge Function → agent_inbox
+2. MessaggiSection genera risposta automaticamente (buildAgentContext + generateGuestReply)
+3. Utente copia risposta → apre Subito → incolla → invia manualmente
+4. Segna come gestito
+
+## Future Vision — Agente Personale Operativo
+
+GestAffitti evolverà in un agente personale operativo per la gestione affitti brevi.
+L'agente dovrà essere in grado di:
+
+**Gestione richieste:**
+- leggere e classificare richieste arrivate da qualsiasi canale
+- riconoscere appartamento, periodo, ospiti, budget
+- controllare disponibilità sul calendario reale
+- calcolare prezzi e applicare regole di soggiorno
+- proporre alternative verificate sul calendario
+- generare risposta naturale tramite LLM verticale
+- seguire la trattativa (controproposta, domande caparra, dati cliente)
+
+**Gestione pratiche:**
+- creare e aggiornare lead/pratiche per ogni richiesta
+- chiedere e raccogliere dati cliente (nome, telefono, email)
+- indicare importo e metodo pagamento caparra
+- creare prenotazione nel calendario dopo conferma
+- gestire stato pratica: in_trattativa → confermata → archiviata
+
+**Analisi economica:**
+- rispondere a domande su fatturato, occupazione, costi
+- stato appartamenti, prenotazioni in corso, caparre attese
+- scadenze (pulizie, check-in, pagamenti)
+
+**Integrazione futura:**
+- LLM verticale specializzato (addestrato su storico risposte approvate)
+- API diretta Subito / WhatsApp per invio risposta senza copia-incolla
+- automazione prenotazione dopo approvazione owner
+- notifiche push per messaggi urgenti
+
+**Ordine di implementazione:**
+1. ✅ MessaggiSection inbox operativa (fatto)
+2. Lead/Pratiche (prossimo)
+3. Salvataggio decisioni e apprendimento
+4. Context builder per LLM
+5. LLM verticale (solo dopo dati sufficienti)
+6. API diretta invio risposte

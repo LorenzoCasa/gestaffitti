@@ -154,7 +154,7 @@ export default function AgentSection({ apartments, bookings, user }) {
       </h2>
 
       <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.9rem" }}>
-        {[{ id: "analisi", label: "Analisi" }, { id: "chat", label: "Chat" }].map(t => (
+        {[{ id: "chat", label: "Chat" }, { id: "analisi", label: "Analisi manuale" }].map(t => (
           <button key={t.id} onClick={() => setMode(t.id)} style={{ padding: "0.3rem 0.9rem", borderRadius: "6px", border: "1px solid #3a3020", background: mode === t.id ? "#c9a96e" : "#1a1612", color: mode === t.id ? "#0a0806" : "#8a7a60", fontWeight: mode === t.id ? "700" : "400", cursor: "pointer", fontSize: "0.75rem" }}>
             {t.label}
           </button>
