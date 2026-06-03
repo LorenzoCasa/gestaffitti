@@ -11,6 +11,7 @@ import AgentChat from "../../agent/AgentChat";
 export default function AgentSection({ apartments, bookings, user }) {
   const realApts = apartments.filter(a => a.id !== "all");
   const [mode, setMode] = useState("chat");
+  const [showDebug, setShowDebug] = useState(false);
 
   const {
     aptRules,
@@ -153,81 +154,73 @@ export default function AgentSection({ apartments, bookings, user }) {
         🤖 Agente Interno
       </h2>
 
-      <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.9rem" }}>
-        {[{ id: "chat", label: "Chat" }, { id: "analisi", label: "Analisi manuale" }].map(t => (
-          <button key={t.id} onClick={() => setMode(t.id)} style={{ padding: "0.3rem 0.9rem", borderRadius: "6px", border: "1px solid #3a3020", background: mode === t.id ? "#c9a96e" : "#1a1612", color: mode === t.id ? "#0a0806" : "#8a7a60", fontWeight: mode === t.id ? "700" : "400", cursor: "pointer", fontSize: "0.75rem" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Chat — sempre visibile, è l'unica UI principale */}
+      <AgentChat
+        apartments={apartments}
+        bookings={bookings}
+        aptRules={aptRules}
+        inbox={inbox}
+        decisions={decisions}
+      />
 
-      {mode === "chat" && (
-        <AgentChat
-          apartments={apartments}
-          bookings={bookings}
-          aptRules={aptRules}
-          inbox={inbox}
-          decisions={decisions}
-        />
-      )}
+      {/* Debug / Strumenti — collassato, non presentato come flusso normale */}
+      <div style={{ marginTop: "1.2rem" }}>
+        <button
+          onClick={() => setShowDebug(d => !d)}
+          style={{ background: "none", border: "none", color: "#2a2010", fontSize: "0.58rem", cursor: "pointer", padding: 0, fontFamily: "Georgia,serif", letterSpacing: "0.05em" }}>
+          {showDebug ? "▲ Nascondi strumenti" : "▼ Strumenti / Debug"}
+        </button>
 
-      {mode === "analisi" && (
-        <>
-          {agentLoading && (
-            <div style={{ color: "#6a5a40", fontSize: "0.8rem", marginBottom: "0.7rem" }}>
-              Caricamento regole appartamento…
+        {showDebug && (
+          <div style={{ marginTop: "0.7rem", padding: "0.8rem", background: "#0d0a07", border: "1px solid #1a1510", borderRadius: "10px" }}>
+            <div style={{ fontSize: "0.65rem", color: "#4a3a20", marginBottom: "0.7rem", fontFamily: "'Playfair Display',serif" }}>
+              Analisi manuale — strumento di debug. La gestione operativa avviene in Messaggi.
             </div>
-          )}
-
-          {realApts.length === 0 ? (
-            <div style={{ background: "rgba(201,169,110,0.08)", border: "1px solid #c9a96e44", borderRadius: "10px", padding: "0.9rem 1rem" }}>
-              <span style={{ color: "#c9a96e", fontSize: "0.85rem" }}>
-                ⚠️ Nessun appartamento configurato. Aggiungine uno in <strong>Impostazioni</strong>.
-              </span>
-            </div>
-          ) : (
-            <>
-              <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
-              {listingWarning && (
-                <div style={{ background: "rgba(201,110,110,0.08)", border: "1px solid #c96e6e55", borderRadius: "8px", padding: "0.55rem 0.75rem", marginBottom: "0.7rem", fontSize: "0.73rem", color: "#c96e6e" }}>
-                  ⚠️ {listingWarning}
-                </div>
-              )}
-              {parserResult && (
-                <div style={{ background: "#0d0a07", border: "1px solid #2a2010", borderRadius: "10px", padding: "0.65rem 0.9rem", marginBottom: "0.7rem", fontSize: "0.73rem" }}>
-                  <div style={{ color: "#8a7a60", fontFamily: "'Playfair Display',serif", marginBottom: "0.3rem" }}>🧠 Parser</div>
-                  {parserResult.isFullMonth && (
-                    <div style={{ color: "#c9a96e" }}>📅 Richiesta mese intero (mese {parserResult.fullMonthNum})</div>
-                  )}
-                  {parserResult.missingFields.length > 0 && (
-                    <div style={{ color: "#c96e6e" }}>⚠️ Da completare: {parserResult.missingFields.join(", ")}</div>
-                  )}
-                  {parserResult.warnings.length > 0 && (
-                    <div style={{ color: "#c9c96e" }}>⚠️ {parserResult.warnings.join(", ")}</div>
-                  )}
-                  {!parserResult.isFullMonth && parserResult.missingFields.length === 0 && (
-                    <div style={{ color: "#6ec99a" }}>✓ Date e ospiti riconosciuti</div>
-                  )}
-                </div>
-              )}
-              <MessageComposer
-                apartments={realApts}
-                onAnalyze={handleAnalyze}
-                loading={analyzing || agentLoading}
-                initialValues={composerInitialValues}
-              />
-              {decision && (
-                <DecisionCard
-                  decision={decision}
-                  onSave={handleSave}
-                  saving={saving}
-                  saved={saved}
+            {agentLoading && (
+              <div style={{ color: "#6a5a40", fontSize: "0.8rem", marginBottom: "0.7rem" }}>
+                Caricamento regole appartamento…
+              </div>
+            )}
+            {realApts.length === 0 ? (
+              <div style={{ color: "#c9a96e", fontSize: "0.8rem" }}>
+                ⚠️ Nessun appartamento configurato.
+              </div>
+            ) : (
+              <>
+                <InboxList inbox={inbox} onLoad={handleLoadFromInbox} />
+                {listingWarning && (
+                  <div style={{ background: "rgba(201,110,110,0.08)", border: "1px solid #c96e6e55", borderRadius: "8px", padding: "0.55rem 0.75rem", marginBottom: "0.7rem", fontSize: "0.73rem", color: "#c96e6e" }}>
+                    ⚠️ {listingWarning}
+                  </div>
+                )}
+                {parserResult && (
+                  <div style={{ background: "#0d0a07", border: "1px solid #2a2010", borderRadius: "10px", padding: "0.65rem 0.9rem", marginBottom: "0.7rem", fontSize: "0.73rem" }}>
+                    <div style={{ color: "#8a7a60", fontFamily: "'Playfair Display',serif", marginBottom: "0.3rem" }}>🧠 Parser</div>
+                    {parserResult.isFullMonth && <div style={{ color: "#c9a96e" }}>📅 Richiesta mese intero (mese {parserResult.fullMonthNum})</div>}
+                    {parserResult.missingFields.length > 0 && <div style={{ color: "#c96e6e" }}>⚠️ Da completare: {parserResult.missingFields.join(", ")}</div>}
+                    {parserResult.warnings.length > 0 && <div style={{ color: "#c9c96e" }}>⚠️ {parserResult.warnings.join(", ")}</div>}
+                    {!parserResult.isFullMonth && parserResult.missingFields.length === 0 && <div style={{ color: "#6ec99a" }}>✓ Date e ospiti riconosciuti</div>}
+                  </div>
+                )}
+                <MessageComposer
+                  apartments={realApts}
+                  onAnalyze={handleAnalyze}
+                  loading={analyzing || agentLoading}
+                  initialValues={composerInitialValues}
                 />
-              )}
-            </>
-          )}
-        </>
-      )}
+                {decision && (
+                  <DecisionCard
+                    decision={decision}
+                    onSave={handleSave}
+                    saving={saving}
+                    saved={saved}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

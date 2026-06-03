@@ -44,11 +44,11 @@ function fmtShortDate(iso) {
 }
 
 function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
-  const [expanded, setExpanded]   = useState(false);
-  const [copied,   setCopied]     = useState(false);
+  const [showMessage, setShowMessage] = useState(false);
+  const [copied,      setCopied]      = useState(false);
 
-  const realApts  = apartments.filter(a => a.id !== "all");
-  const cleanText = looksLikeHtml(item.raw_text)
+  const realApts   = apartments.filter(a => a.id !== "all");
+  const cleanText  = looksLikeHtml(item.raw_text)
     ? stripHtml(item.raw_text)
     : (item.raw_text ?? "");
 
@@ -81,17 +81,17 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
     console.error("[MessageCard] buildAgentContext:", e);
   }
 
-  const responseText  = context ? generateGuestReply(context) : null;
-  const subitoLink    = extractSubitoLink(item.raw_metadata, cleanText);
-  const apt           = realApts.find(a => a.id === aptId);
-  const color         = STATUS_COLORS[item.status] ?? "#c9a96e";
-  const isNew         = ["new", "processing"].includes(item.status);
-  const decisionType  = context?.decision?.type;
-  const avail         = context?.availability;
-  const pricing       = context?.pricing;
-  const checkin       = context?.inquiry.checkin  ?? item.parsed_checkin;
-  const checkout      = context?.inquiry.checkout ?? item.parsed_checkout;
-  const guests        = context?.inquiry.guests   ?? item.parsed_guests;
+  const responseText = context ? generateGuestReply(context) : null;
+  const subitoLink   = extractSubitoLink(item.raw_metadata, cleanText);
+  const apt          = realApts.find(a => a.id === aptId);
+  const color        = STATUS_COLORS[item.status] ?? "#c9a96e";
+  const isNew        = ["new", "processing"].includes(item.status);
+  const decisionType = context?.decision?.type;
+  const avail        = context?.availability;
+  const pricing      = context?.pricing;
+  const checkin      = context?.inquiry.checkin  ?? item.parsed_checkin;
+  const checkout     = context?.inquiry.checkout ?? item.parsed_checkout;
+  const guests       = context?.inquiry.guests   ?? item.parsed_guests;
 
   const periodText = checkin && checkout
     ? fmtShortDate(checkin) + " → " + fmtShortDate(checkout)
@@ -105,9 +105,10 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
     });
   }
 
-  const btnBase = {
-    borderRadius: "6px", padding: "0.22rem 0.55rem",
-    fontSize: "0.63rem", cursor: "pointer", fontFamily: "Georgia,serif",
+  const btnPrimary = {
+    borderRadius: "7px", padding: "0.3rem 0.7rem",
+    fontSize: "0.7rem", cursor: "pointer", fontFamily: "Georgia,serif",
+    fontWeight: "600", border: "none",
   };
 
   return (
@@ -116,12 +117,12 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
       border: "1px solid #2a2010",
       borderLeft: "3px solid " + color,
       borderRadius: "12px",
-      padding: "0.8rem 0.95rem",
-      marginBottom: "0.55rem",
+      padding: "0.85rem 1rem",
+      marginBottom: "0.6rem",
     }}>
 
-      {/* ── Header: badges + data ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem", gap: "0.5rem", flexWrap: "wrap" }}>
+      {/* ── Header: source + status + decision + data ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.45rem", gap: "0.5rem", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ background: "#2a2010", color: "#c9a96e", border: "1px solid #c9a96e33", borderRadius: "20px", padding: "0.1rem 0.5rem", fontSize: "0.63rem", fontWeight: "700", textTransform: "uppercase", fontFamily: "'Playfair Display',serif" }}>
             {SOURCE_LABELS[item.source] ?? item.source}
@@ -141,101 +142,97 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
       </div>
 
       {/* ── Meta: apt + periodo + ospiti + disponibilità + prezzo ── */}
-      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.55rem", flexWrap: "wrap", alignItems: "center" }}>
         {apt ? (
-          <span style={{ fontSize: "0.7rem", color: apt.color ?? "#c9a96e", fontWeight: "600" }}>
+          <span style={{ fontSize: "0.72rem", color: apt.color ?? "#c9a96e", fontWeight: "700" }}>
             🏠 {apt.label}
           </span>
         ) : unrecognized ? (
           <span style={{ fontSize: "0.68rem", color: "#c96e6e" }}>⚠️ Appartamento non riconosciuto</span>
         ) : null}
-
-        {periodText && (
-          <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>📅 {periodText}</span>
-        )}
-        {guests && (
-          <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>👤 {guests} ospiti</span>
-        )}
+        {periodText && <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>📅 {periodText}</span>}
+        {guests    && <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>👤 {guests} ospiti</span>}
         {avail && checkin && (
-          <span style={{ fontSize: "0.68rem", fontWeight: "600", color: avail.isAvailable ? "#6ec99a" : "#c96e6e" }}>
-            {avail.isAvailable ? "✓ Disponibile" : "✗ Occupato"}
+          <span style={{ fontSize: "0.68rem", fontWeight: "700", color: avail.isAvailable ? "#6ec99a" : "#c96e6e" }}>
+            {avail.isAvailable ? "✓ Libero" : "✗ Occupato"}
           </span>
         )}
         {pricing?.totalPrice != null && checkin && !context?.stayRules?.isFullMonth && (
-          <span style={{ fontSize: "0.68rem", color: "#c9a96e" }}>€{pricing.totalPrice}</span>
+          <span style={{ fontSize: "0.7rem", color: "#c9a96e", fontWeight: "600" }}>€{pricing.totalPrice}</span>
         )}
       </div>
 
-      {/* ── Testo cliente (pulito) ── */}
-      {cleanText ? (
-        <div style={{
-          fontSize: "0.75rem", color: "#c0a870", lineHeight: "1.5",
-          background: "#0d0a07", borderRadius: "7px", padding: "0.4rem 0.6rem",
-          marginBottom: "0.4rem",
-          maxHeight: expanded ? "none" : "2.8rem",
-          overflow: "hidden",
-          whiteSpace: "pre-wrap",
-        }}>
-          {cleanText}
-        </div>
-      ) : null}
-
-      {/* ── Risposta suggerita — sempre visibile, collassata ── */}
+      {/* ── Risposta suggerita — HERO, sempre completamente visibile ── */}
       {responseText && (
         <div style={{
-          fontSize: "0.72rem", color: "#90c890", lineHeight: "1.5",
-          background: "#0a120a", border: "1px solid #2a4a2a33",
-          borderRadius: "7px", padding: "0.5rem 0.65rem", marginBottom: "0.4rem",
+          fontSize: "0.78rem", color: "#a0d8a0", lineHeight: "1.55",
+          background: "#0a140a", border: "1px solid #2a4a2a55",
+          borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.55rem",
           whiteSpace: "pre-wrap",
-          maxHeight: expanded ? "none" : "5.5rem",
-          overflow: "hidden",
         }}>
-          <div style={{ fontSize: "0.58rem", color: "#4a7a4a", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.3rem", fontFamily: "'Playfair Display',serif" }}>
+          <div style={{ fontSize: "0.58rem", color: "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: "0.35rem", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
             Risposta suggerita
           </div>
           {responseText}
         </div>
       )}
 
-      {/* ── Azioni ── */}
-      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+      {/* ── Action bar principale ── */}
+      <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
 
-        {/* Espandi/comprimi */}
-        <button onClick={() => setExpanded(e => !e)} style={{ background: "none", border: "none", color: "#5a4a30", fontSize: "0.63rem", cursor: "pointer", padding: 0, fontFamily: "Georgia,serif" }}>
-          {expanded ? "Mostra meno ▲" : "Mostra tutto ▼"}
-        </button>
-
-        {/* Copia risposta — sempre visibile se risposta esiste */}
-        {responseText && (
+        {/* 1. Copia risposta */}
+        {responseText ? (
           <button
             onClick={handleCopy}
-            style={{ ...btnBase, background: copied ? "#1a3a1a" : "#1a1a2a", border: "1px solid " + (copied ? "#6ec99a55" : "#3a3a6a55"), color: copied ? "#6ec99a" : "#8888cc" }}>
+            style={{ ...btnPrimary, background: copied ? "#1a4a1a" : "#1a1a3a", color: copied ? "#6ec99a" : "#9999dd" }}>
             {copied ? "✓ Copiato!" : "📋 Copia risposta"}
           </button>
+        ) : (
+          <span style={{ fontSize: "0.65rem", color: "#3a3020" }}>Risposta non disponibile</span>
         )}
 
-        {/* Apri Subito */}
+        {/* 2. Apri Subito */}
         {subitoLink ? (
           <a
             href={subitoLink}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ ...btnBase, background: "#1a1510", border: "1px solid #c9a96e44", color: "#c9a96e", textDecoration: "none", display: "inline-block" }}>
+            style={{ ...btnPrimary, background: "#1a1812", color: "#c9a96e", border: "1px solid #c9a96e33", textDecoration: "none", display: "inline-block" }}>
             🔗 Apri Subito
           </a>
         ) : (
-          <span style={{ fontSize: "0.6rem", color: "#3a3020" }}>link Subito non disponibile</span>
+          <span style={{ fontSize: "0.63rem", color: "#3a3020", fontStyle: "italic" }}>🔗 Link non disponibile</span>
         )}
 
-        {/* Segna come gestito — solo per messaggi nuovi */}
+        {/* 3. Segna come gestito — push a destra */}
         {isNew && (
           <button
             onClick={() => onMarkDone(item.id)}
-            style={{ ...btnBase, background: "#0a1a0a", border: "1px solid #6ec99a33", color: "#6ec99a", marginLeft: "auto" }}>
-            ✓ Segna come gestito
+            style={{ ...btnPrimary, background: "#0a1a0a", color: "#6ec99a", border: "1px solid #6ec99a33", marginLeft: "auto" }}>
+            ✓ Segna gestito
           </button>
         )}
       </div>
+
+      {/* ── Testo cliente — secondario, collassato ── */}
+      {cleanText && (
+        <div style={{ marginTop: "0.45rem" }}>
+          <button
+            onClick={() => setShowMessage(m => !m)}
+            style={{ background: "none", border: "none", color: "#3a2a18", fontSize: "0.6rem", cursor: "pointer", padding: 0, fontFamily: "Georgia,serif" }}>
+            {showMessage ? "▲ Nascondi messaggio" : "▼ Messaggio ricevuto"}
+          </button>
+          {showMessage && (
+            <div style={{
+              fontSize: "0.73rem", color: "#8a7a50", lineHeight: "1.45",
+              background: "#0d0a07", borderRadius: "6px", padding: "0.4rem 0.6rem",
+              marginTop: "0.3rem", whiteSpace: "pre-wrap",
+            }}>
+              {cleanText}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -267,8 +264,8 @@ export default function MessaggiSection({ user, apartments, bookings }) {
       {/* Tab: Nuovi / Già gestiti */}
       <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.9rem" }}>
         {[
-          { id: "nuovi",   label: "Nuovi",        count: nuovi.length   },
-          { id: "gestiti", label: "Già gestiti",  count: gestiti.length },
+          { id: "nuovi",   label: "Nuovi",       count: nuovi.length   },
+          { id: "gestiti", label: "Già gestiti", count: gestiti.length },
         ].map(t => {
           const active = tab === t.id;
           return (
@@ -279,7 +276,7 @@ export default function MessaggiSection({ user, apartments, bookings }) {
                 background:   active ? "#2a2010" : "#120f0a",
                 border:       active ? "1px solid #c9a96e55" : "1px solid #2a2010",
                 borderRadius: "20px",
-                padding:      "0.3rem 0.8rem",
+                padding:      "0.3rem 0.85rem",
                 color:        active ? "#c9a96e" : "#5a4a30",
                 fontSize:     "0.7rem",
                 fontFamily:   "'Playfair Display',serif",

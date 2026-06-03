@@ -169,20 +169,27 @@ verificare disponibilità → calcolare alternative → produrre suggestedRespon
 
 Il calendario ha sempre priorità. La risposta non può mai dire disponibile se il calendario dice occupato.
 
-**Centro operativo: MessaggiSection**
-La sezione Messaggi è il punto operativo principale.
-Ogni messaggio Subito mostra direttamente: appartamento riconosciuto, disponibilità reale,
-prezzo, risposta suggerita, tasto Copia risposta, tasto Apri Subito, tasto Segna come gestito.
+**Centro operativo UNICO: MessaggiSection**
+MessaggiSection è l'UNICO punto operativo per gestire richieste Subito.
+Non esistono flussi paralleli. Non serve passare per AgentSection per analizzare un messaggio.
 
-Flusso semi-automatico attuale:
+Ogni card in Messaggi mostra direttamente (senza click aggiuntivi):
+- appartamento riconosciuto, periodo, ospiti
+- disponibilità reale sul calendario
+- prezzo e tipo decisione
+- risposta suggerita VISIBILE (non nascosta)
+- Copia risposta · Apri Subito · Segna come gestito
+
+Flusso semi-automatico attuale (tutto dentro Messaggi):
 1. Messaggio arriva via Make → webhook → agent_inbox
-2. MessaggiSection mostra risposta suggerita
-3. Utente copia risposta → apre Subito → incolla → invia manualmente
-4. Segna come gestito
+2. MessaggiSection genera risposta automaticamente
+3. Utente copia → apre Subito → incolla → invia manualmente
+4. Segna come gestito → passa in "Già gestiti"
 
-**Sezione Agente: chat interna**
-AgentSection è la chat interna dell'app per domande su disponibilità, calendario,
-messaggi, prezzi, stato dell'app. Non è il passaggio obbligatorio per ogni messaggio.
+**Sezione Agente: assistente interno (non per gestione messaggi)**
+AgentSection è la chat interna per domande ad hoc su disponibilità, calendario, prezzi.
+NON è il passaggio obbligatorio per analizzare messaggi. Non deve essere presentata come tale.
+Il vecchio strumento "Analisi manuale" è conservato solo come debug tool, non come UI principale.
 
 **Pulizia HTML email**
 Il webhook strip HTML dal raw_text e salva html_body in raw_metadata.

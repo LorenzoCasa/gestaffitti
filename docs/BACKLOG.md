@@ -35,7 +35,8 @@ Filtro: solo email con subject "Nuovo messaggio" vengono accettate (email_subjec
 - Nessun fallback silenzioso: warning se appartamento non riconosciuto
 
 ### ✅ AgentSection = chat interna
-Default su chat. Tab "Analisi manuale" secondaria.
+Default su chat. "Analisi manuale" nascosta in sezione debug collassata.
+MessaggiSection è l'unico centro operativo per richieste Subito.
 
 ---
 
