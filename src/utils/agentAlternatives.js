@@ -3,7 +3,7 @@ import { getSubitoSeasonalPrice } from './agentSeasonalRates.js';
 
 const PEAK_MONTHS  = new Set([6, 7, 8]);
 const VALID_NIGHTS = [7, 14, 21];
-const MAX_OFFSET   = 30; // days
+const MAX_OFFSET   = 15; // days — RENTAL_AGENT_RULES: ±15 giorni max
 
 function weekdayUTC(iso) {
   return new Date(iso + 'T12:00:00Z').getUTCDay();
