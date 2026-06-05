@@ -1,5 +1,4 @@
 import { useState } from "react";
-import useAgentData from "../../../hooks/useAgentData";
 import { stripHtml, looksLikeHtml, extractSubitoLink } from "../../../utils/stripHtml";
 import { resolveListingFromTitle, extractListingTitle } from "../../../utils/agentListingResolver";
 import { buildAgentContext } from "../../../utils/buildAgentContext";
@@ -237,8 +236,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
   );
 }
 
-export default function MessaggiSection({ user, apartments, bookings }) {
-  const { inbox, aptRules, agentLoading, updateInboxStatus } = useAgentData(user);
+export default function MessaggiSection({ apartments, bookings, inbox, aptRules, agentLoading, updateInboxStatus }) {
   const [tab, setTab] = useState("nuovi");
 
   const nuovi   = inbox.filter(i => ["new", "processing"].includes(i.status));
