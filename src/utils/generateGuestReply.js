@@ -214,6 +214,20 @@ Restiamo a disposizione.
 Cordiali saluti`;
   },
 
+  price_query({ inquiry, pricing }) {
+    const monthName = itMonth(inquiry.requestedMonth);
+    const weekly    = pricing.weeklyRate != null ? `€${pricing.weeklyRate}/settimana` : null;
+    const monthly   = pricing.monthRate  != null ? `€${pricing.monthRate} mese intero` : null;
+    const priceLines = [weekly, monthly].filter(Boolean).join(' — ');
+    const monthLine  = monthName !== '—' ? ` per ${monthName}` : '';
+    return `Salve,
+i prezzi${monthLine} sono: ${priceLines || '(da confermare)'}.
+
+Può indicarci il periodo che preferisce e il numero di ospiti?
+Verificheremo subito la disponibilità sul calendario.
+Cordiali saluti`;
+  },
+
   manual_review() {
     return `Salve,
 grazie per il suo messaggio.
@@ -231,7 +245,9 @@ Cordiali saluti`;
  * @returns {string}
  */
 export function generateGuestReply(context) {
-  const type = context?.decision?.type ?? 'manual_review';
-  const fn   = TEMPLATES[type] ?? TEMPLATES.manual_review;
+  const type = context?.inquiry?.isPriceQuery
+    ? 'price_query'
+    : (context?.decision?.type ?? 'manual_review');
+  const fn = TEMPLATES[type] ?? TEMPLATES.manual_review;
   return fn(context);
 }

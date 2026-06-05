@@ -205,6 +205,13 @@ function extractFlexiblePeriod(text) {
     requestedWeekPosition = 'last';
   }
 
+  // "inizio / metà / fine [mese]" → map to week position (only if not already set by settimana patterns)
+  if (!requestedWeekPosition && requestedMonth) {
+    if (/\binizio\b/i.test(t))              requestedWeekPosition = 'first';
+    else if (/\bmet[aà](?!\w)/i.test(t))   requestedWeekPosition = 'second';
+    else if (/\bfine\b/i.test(t))          requestedWeekPosition = 'last';
+  }
+
   // When position implies one or two weeks but no explicit number was given, infer it
   if (requestedWeekPosition && !requestedWeeks) {
     requestedWeeks = (requestedWeekPosition === 'first_two' || requestedWeekPosition === 'last_two') ? 2 : 1;
@@ -258,6 +265,7 @@ export function parseAgentInquiry(rawText, rawMetadata = {}) {
     requestedNights:        flex.requestedNights,
     requestedWeekPosition:  flex.requestedWeekPosition,
     isFlexibleDatesRequest: flex.isFlexibleDatesRequest,
+    isPriceQuery: /quanto\s+costa|prezz[oi]/i.test(text) && !checkin && !checkout && !_fm,
     rawMetadata,
   };
 }
