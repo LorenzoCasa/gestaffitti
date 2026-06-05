@@ -20,19 +20,28 @@ function resolveAptRules(aptId, source, aptRules) {
   );
 }
 
-function decideType({ inquiry, availability, stayRules, pricing, alternatives }) {
-  // Full-month request: dates not required, price sufficient to respond
+function decideType({ inquiry, availability, stayRules, pricing, alternatives, fullMonthAvailability }) {
+  // Full-month request: price + calendar check required
   if (inquiry.isFullMonth) {
-    return pricing.totalPrice != null ? 'full_month' : 'needs_info';
+    if (pricing.totalPrice == null) return 'needs_info';
+    return 'full_month';
   }
-  if (!inquiry.checkin || !inquiry.checkout || inquiry.missingFields.length > 0) {
+  // Dates missing — cannot proceed
+  if (!inquiry.checkin || !inquiry.checkout) {
     return 'needs_info';
   }
+  // Outside stay rules (non sab-sab): report this regardless of guest count —
+  // providing guests won't fix invalid dates, so asking for them first is unhelpful.
   if (stayRules.needsRules && !stayRules.valid) {
     return 'outside_rules';
   }
+  // Calendar unavailable
   if (!availability.isAvailable) {
     return alternatives.count > 0 ? 'has_alternatives' : 'unavailable';
+  }
+  // Dates valid + available: NOW require guest count before showing price (#4)
+  if (!inquiry.guests) {
+    return 'needs_info';
   }
   if (pricing.totalPrice === null) {
     return 'needs_info';
@@ -174,6 +183,44 @@ export function buildAgentContext({
     };
   }
 
+  // 4b. Full-month calendar check — "tutto agosto" must verify the calendar too.
+  // Uses a virtual range [first day of month, first day of next month) to detect
+  // any booking that would block the entire month.
+  let fullMonthAvailability = null;
+  let fullMonthWeekWindows  = null;
+  if (isFullMonth && fullMonthNum && aptId) {
+    const fmYear  = inferYearForMonth(fullMonthNum);
+    const mm      = String(fullMonthNum).padStart(2, '0');
+    const fmStart = `${fmYear}-${mm}-01`;
+    const nextNum  = fullMonthNum === 12 ? 1 : fullMonthNum + 1;
+    const nextYear = fullMonthNum === 12 ? fmYear + 1 : fmYear;
+    const fmEnd   = `${nextYear}-${String(nextNum).padStart(2, '0')}-01`;
+    const fmAvail = checkAvailability(
+      { aptId, checkin: fmStart, checkout: fmEnd },
+      bookings,
+      { minNights: 1, bufferBeforeDays: 0, bufferAfterDays: 0 },
+    );
+    fullMonthAvailability = {
+      isAvailable:        fmAvail.available,
+      conflictingBooking: fmAvail.conflictingBooking ?? null,
+      checkin:            fmStart,
+      checkout:           fmEnd,
+    };
+    // If month is occupied, pre-compute available week-windows as fallback
+    if (!fmAvail.available) {
+      const fmApt = realApts.find(a => a.id === aptId);
+      fullMonthWeekWindows = findWindowsInMonth({
+        aptId,
+        aptLabel: fmApt?.label ?? '',
+        month:    fullMonthNum,
+        nights:   7,
+        bookings,
+        year:     fmYear,
+        maxTotal: 4,
+      });
+    }
+  }
+
   // 5. Stay rules
   const sr = checkStayRules(checkin, checkout, { isFullMonth, fullMonthNum });
   const stayRules = {
@@ -219,7 +266,7 @@ export function buildAgentContext({
 
   // 9. Decision type (deterministic — never LLM)
   const decision = {
-    type: decideType({ inquiry, availability, stayRules, pricing, alternatives }),
+    type: decideType({ inquiry, availability, stayRules, pricing, alternatives, fullMonthAvailability }),
   };
 
   // 10. Aggregate warnings
@@ -227,12 +274,15 @@ export function buildAgentContext({
     ...(inquiry.warnings ?? []),
     ...(stayRules.needsRules && !stayRules.valid ? [`stay_rules: ${stayRules.reason}`] : []),
     ...(pricing.reason ? [`pricing: ${pricing.reason}`] : []),
+    ...(fullMonthAvailability && !fullMonthAvailability.isAvailable ? ['full_month_occupied'] : []),
   ];
 
   return {
     inquiry,
     apartment,
     availability,
+    fullMonthAvailability,
+    fullMonthWeekWindows,
     pricing,
     stayRules,
     alternatives,
