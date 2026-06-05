@@ -97,16 +97,29 @@ Cordiali saluti`;
     return `Salve,\nla ringraziamo per la sua richiesta.\n${body}\n\nLe interessa una di queste soluzioni?\nCordiali saluti`;
   },
 
-  outside_rules({ inquiry, stayRules }) {
-    const sug = (stayRules.suggestedValidRanges ?? []).slice(0, 2).map(r => {
-      const price = r.pricing?.totalPrice != null ? `, €${r.pricing.totalPrice}` : '';
-      return `  • ${itDate(r.checkin)} – ${itDate(r.checkout)} (${r.nights} notti${price})`;
-    }).join('\n');
+  outside_rules({ inquiry, stayRules, alternatives }) {
+    // Calendar-verified alternatives take priority over mathematical sat-sat suggestions.
+    // suggestedValidRanges is a pure date calculation — NOT checked against bookings.
+    let altLines = [];
+    if (alternatives?.items?.length > 0) {
+      altLines = alternatives.items.slice(0, 3).map(a => {
+        const price = a.pricing?.totalPrice != null ? `, €${a.pricing.totalPrice}` : '';
+        return `  📅 ${itDate(a.checkin)} – ${itDate(a.checkout)} (${a.nights} notti${price})`;
+      });
+    } else {
+      altLines = (stayRules.suggestedValidRanges ?? []).slice(0, 2).map(r => {
+        const price = r.pricing?.totalPrice != null ? `, €${r.pricing.totalPrice}` : '';
+        return `  • ${itDate(r.checkin)} – ${itDate(r.checkout)} (${r.nights} notti${price})`;
+      });
+    }
+    const altBlock = altLines.length > 0
+      ? `Alcune date compatibili (sabato → sabato):\n${altLines.join('\n')}\n\n`
+      : '';
     return `Salve,
 grazie per la sua richiesta.
 Per i mesi di giugno, luglio e agosto ospitiamo soggiorni da sabato a sabato, con durate di 7, 14 o 21 notti.
 
-${sug ? `Alcune date compatibili:\n${sug}\n\n` : ''}Possiamo valutare insieme una soluzione adatta alle sue esigenze.
+${altBlock}Possiamo valutare insieme una soluzione adatta alle sue esigenze.
 Cordiali saluti`;
   },
 
@@ -133,7 +146,10 @@ Cordiali saluti`;
                         : requestedNights === 14 ? 'due settimane'
                         : requestedNights === 21 ? 'tre settimane'
                         : `${requestedNights} notti`;
-      const aptLine = apartment?.label ? ` per ${apartment.label}` : '';
+      const aptLine   = apartment?.label ? ` per ${apartment.label}` : '';
+      const guestNote = !inquiry.guests
+        ? '\n\nCi può indicare il numero di ospiti previsto, così da confermare il prezzo?'
+        : '';
       const lines = monthWindows.map(w => {
         const price = w.pricing?.totalPrice != null ? `, €${w.pricing.totalPrice}` : '';
         return `  📅 ${itDate(w.checkin)} – ${itDate(w.checkout)} (${w.nights} notti${price})`;
@@ -145,7 +161,8 @@ Per ${nightsLabel} in ${monthName} abbiamo queste disponibilità:
 
 ${lines.join('\n')}
 
-Le interessa uno di questi periodi? Restiamo a disposizione.
+Le interessa uno di questi periodi?${guestNote}
+Restiamo a disposizione.
 Cordiali saluti`;
     }
 
@@ -182,9 +199,22 @@ Restiamo a disposizione.
 Cordiali saluti`;
     }
 
+    // ── Caso E: date note, solo numero ospiti mancante ───────────────────────
+    if (inquiry.checkin && inquiry.checkout && !inquiry.guests) {
+      const aptLine = apartment?.label ? ` per ${apartment.label}` : '';
+      return `Salve,
+grazie per la sua richiesta${aptLine}!
+
+Per completare la verifica di disponibilità ci può indicare il numero di persone?
+
+Restiamo a disposizione.
+Cordiali saluti`;
+    }
+
     // ── Caso D: standard needs_info (nessun mese riconosciuto) ───────────────
+    const FIELD_LABELS = { checkin: 'data di arrivo', checkout: 'data di partenza', guests: 'numero di ospiti' };
     const extra = inquiry.missingFields?.length
-      ? `\nIn particolare ci mancano: ${inquiry.missingFields.join(', ')}.`
+      ? `\nIn particolare ci serve: ${inquiry.missingFields.map(f => FIELD_LABELS[f] ?? f).join(', ')}.`
       : '';
     return `Salve,
 grazie per averci contattato!
@@ -197,18 +227,39 @@ Risponderemo al più presto.
 Cordiali saluti`;
   },
 
-  full_month({ inquiry, apartment, pricing }) {
+  full_month({ inquiry, apartment, pricing, fullMonthAvailability, fullMonthWeekWindows }) {
     const monthName = itMonth(inquiry.fullMonthNum);
-    const price     = pricing.totalPrice != null ? `€${pricing.totalPrice}` : '(prezzo da definire)';
+
+    // Calendar check: month occupied → show available weeks instead
+    if (fullMonthAvailability && !fullMonthAvailability.isAvailable) {
+      const aptLine  = apartment?.label ? ` per ${apartment.label}` : '';
+      const weekLines = (fullMonthWeekWindows ?? []).map(w => {
+        const price = w.pricing?.totalPrice != null ? `, €${w.pricing.totalPrice}` : '';
+        return `  📅 ${itDate(w.checkin)} – ${itDate(w.checkout)} (${w.nights} notti${price})`;
+      });
+      const weekBlock = weekLines.length > 0
+        ? `\nHo comunque queste settimane libere in ${monthName}:\n${weekLines.join('\n')}\n`
+        : '';
+      return `Salve,
+la ringraziamo per l'interesse${aptLine}.
+Purtroppo il mese intero di ${monthName} non è disponibile: ci sono già prenotazioni in quel periodo.
+${weekBlock}
+Vuole valutare una di queste settimane, o preferisce un altro mese?
+Restiamo a disposizione.
+Cordiali saluti`;
+    }
+
+    // Month available
+    const price      = pricing.totalPrice != null ? `€${pricing.totalPrice}` : '(prezzo da definire)';
     const guestsLine = !inquiry.guests
       ? '\n\nCi può indicare il numero di ospiti previsto?'
       : '';
     return `Salve,
 grazie per la sua richiesta per ${apartment.label}!
 
-Per il mese intero di ${monthName} il prezzo indicativo è ${price}.
+Il mese intero di ${monthName} è disponibile. Il prezzo è ${price}.${guestsLine}
 
-Il mese intero è una soluzione valutabile: scriveteci per definire le date precise e verificare la disponibilità sul calendario.${guestsLine}
+Se desidera procedere, scriveteci e definiamo insieme le date precise.
 
 Restiamo a disposizione.
 Cordiali saluti`;
