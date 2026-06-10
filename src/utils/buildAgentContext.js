@@ -44,6 +44,10 @@ function decideType({ inquiry, availability, stayRules, pricing, alternatives, f
     return 'needs_info';
   }
   if (pricing.totalPrice === null) {
+    // Dates present but non-standard duration → propose sat-sat alternatives instead of asking again
+    if (inquiry.checkin && inquiry.checkout && pricing.reason === 'nights_not_multiple_of_7') {
+      return 'outside_rules';
+    }
     return 'needs_info';
   }
   if (inquiry.offeredPrice !== null && inquiry.offeredPrice < pricing.totalPrice) {

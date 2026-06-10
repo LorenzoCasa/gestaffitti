@@ -169,31 +169,39 @@ export function findAlternatives({
   const mainApt   = apartments.find(a => a.id === aptId);
   const otherApts = apartments.filter(a => a.id !== aptId && a.id !== 'all');
 
-  // 1. Other apts, same period (highest priority: same dates on a different apt)
-  for (const apt of otherApts) {
-    if (results.length >= maxTotal) break;
-    const avail = checkAvailability(
-      { aptId: apt.id, checkin: requestedCheckin, checkout: requestedCheckout },
-      bookings, { minNights: 1 }
-    );
-    if (avail.available) {
-      const pricing = getSubitoSeasonalPrice({
-        checkin: requestedCheckin, checkout: requestedCheckout,
-        isFullMonth: false, fullMonthNum: null,
-      });
-      results.push({
-        checkin: requestedCheckin, checkout: requestedCheckout,
-        nights: reqNights, aptId: apt.id, aptLabel: apt.label,
-        pricing,
-        label: fmtDate(requestedCheckin) + ' -> ' + fmtDate(requestedCheckout) +
-          ' (' + reqNights + ' notti)',
-      });
+  const isNonStandardDuration = reqNights % 7 !== 0;
+
+  // 1. Other apts, same period — only for standard durations.
+  // For non-standard durations, proposing another apt on the same non-standard dates is wrong:
+  // the client asked for a specific apt and that stay is not sat-sat regardless of which apt.
+  if (!isNonStandardDuration) {
+    for (const apt of otherApts) {
+      if (results.length >= maxTotal) break;
+      const avail = checkAvailability(
+        { aptId: apt.id, checkin: requestedCheckin, checkout: requestedCheckout },
+        bookings, { minNights: 1 }
+      );
+      if (avail.available) {
+        const pricing = getSubitoSeasonalPrice({
+          checkin: requestedCheckin, checkout: requestedCheckout,
+          isFullMonth: false, fullMonthNum: null,
+        });
+        results.push({
+          checkin: requestedCheckin, checkout: requestedCheckout,
+          nights: reqNights, aptId: apt.id, aptLabel: apt.label,
+          pricing,
+          label: fmtDate(requestedCheckin) + ' -> ' + fmtDate(requestedCheckout) +
+            ' (' + reqNights + ' notti)',
+        });
+      }
     }
   }
 
   // 2. Same apt, sat-sat windows (different dates, same apt)
-  if (isPeak && results.length < maxTotal) {
-    for (const c of satCandidates(requestedCheckin, reqNights)) {
+  // Also search for non-peak months when the requested duration is non-standard (not a multiple of 7)
+  const searchNights = isNonStandardDuration ? 7 : reqNights;
+  if ((isPeak || isNonStandardDuration) && results.length < maxTotal) {
+    for (const c of satCandidates(requestedCheckin, searchNights)) {
       if (results.length >= maxTotal) break;
       const alt = makeAlt(aptId, mainApt?.label ?? '', c.checkin, c.checkout, c.nights, bookings);
       if (alt) results.push(alt);
