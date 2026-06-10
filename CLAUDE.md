@@ -27,6 +27,18 @@ La struttura corretta è:
 4. L'utente approva/modifica prima dell'invio.
 5. In futuro l'agente personale generale dell'utente potrà usare GestAffitti come strumento verticale.
 
+## Tech Stack
+
+Stack attuale:
+- Frontend: React + Vite
+- Backend/DB: Supabase (Edge Functions + PostgreSQL)
+- Deploy: Vercel
+
+Stack target (migrazione in corso):
+- Frontend: Next.js App Router
+- Backend/DB: Supabase (invariato)
+- Deploy: Vercel (invariato)
+
 ## Deterministic Core
 
 Questi elementi sono fonte di verità e non devono essere inventati dall'LLM:
@@ -79,6 +91,21 @@ Non lasciare che l'LLM decida:
 
 Il futuro LLM deve ricevere un context strutturato e generare solo una risposta naturale da approvare.
 
+## GitHub MCP
+
+GitHub MCP è attivo e testato sul repository LorenzoCasa/gestaffitti.
+
+Claude può in autonomia (senza conferma):
+- creare branch remoti
+- creare commit su branch non-main
+- aprire Pull Request verso main
+
+Claude NON può senza approvazione esplicita:
+- fare merge di una PR
+- fare push diretto su main
+- fare deploy
+- toccare database o dipendenze
+
 ## Autonomy Allowed
 
 Puoi lavorare in autonomia su:
@@ -91,6 +118,7 @@ Puoi lavorare in autonomia su:
 - esecuzione npm run build
 - test node locali
 - riepilogo finale
+- creare branch, commit e PR via GitHub MCP
 
 ## Must Ask Before
 
@@ -110,13 +138,14 @@ Devi fermarti e chiedere conferma prima di:
 ## Never
 
 Non fare mai senza conferma:
-- commit
-- push
+- merge di Pull Request
+- push diretto su main
 - deploy
 - invio automatico messaggi
 - creazione automatica prenotazioni
 - chiamate API esterne
 - modifiche database non richieste
+- aggiunta o rimozione dipendenze npm
 - riscrittura completa dell'architettura
 - spostamento massivo di file
 - refactor non richiesti
@@ -247,3 +276,15 @@ L'agente dovrà essere in grado di:
 4. Context builder per LLM
 5. LLM verticale (solo dopo dati sufficienti)
 6. API diretta invio risposte
+
+## Next.js Migration — FULL MODE
+
+La migrazione da React/Vite a Next.js App Router è approvata in FULL MODE.
+
+FULL MODE significa:
+- Claude può lavorare in autonomia sull'intera migrazione senza richiedere conferma per ogni file
+- lo scope della migrazione sovrascrive il limite di 3 file per task
+- Claude crea branch dedicati, fa commit incrementali e apre PR via GitHub MCP
+- il codice applicativo esistente (orchestratore, regole, mapping) non viene riscritto, solo adattato al nuovo routing
+- Supabase, variabili d'ambiente e deploy Vercel rimangono invariati salvo istruzioni esplicite
+- merge, deploy e modifiche database richiedono sempre approvazione esplicita anche in FULL MODE
