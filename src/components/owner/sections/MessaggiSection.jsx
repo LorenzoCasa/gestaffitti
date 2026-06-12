@@ -3,6 +3,7 @@ import { stripHtml, looksLikeHtml, extractSubitoLink } from "../../../utils/stri
 import { resolveListingFromTitle, extractListingTitle } from "../../../utils/agentListingResolver";
 import { buildAgentContext } from "../../../utils/buildAgentContext";
 import { generateGuestReply } from "../../../utils/generateGuestReply";
+import { groupInboxByThread } from "../../../utils/groupInboxByThread";
 
 const STATUS_COLORS = {
   new: "#c9a96e", processing: "#6ea0c9", replied: "#6ec99a",
@@ -42,14 +43,45 @@ function fmtShortDate(iso) {
   return parseInt(d) + " " + months[parseInt(m) - 1];
 }
 
-function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
-  const [showMessage, setShowMessage] = useState(false);
+// ── Mini-card per messaggi storici nel thread ─────────────────────────────────
+
+function HistoryMessageRow({ msg }) {
+  const [expanded, setExpanded] = useState(false);
+  const cleanText = looksLikeHtml(msg.raw_text) ? stripHtml(msg.raw_text) : (msg.raw_text ?? "");
+  const preview = cleanText.length > 100 ? cleanText.slice(0, 100) + "…" : cleanText;
+  const color = STATUS_COLORS[msg.status] ?? "#c9a96e";
+
+  return (
+    <div style={{
+      borderLeft: "2px solid " + color + "55",
+      paddingLeft: "0.6rem",
+      marginBottom: "0.4rem",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
+        <span style={{ fontSize: "0.6rem", color: color, fontWeight: "700", textTransform: "uppercase" }}>
+          {STATUS_LABELS[msg.status] ?? msg.status}
+        </span>
+        <span style={{ fontSize: "0.58rem", color: "#3a2a18" }}>{fmtDatetime(msg.created_at)}</span>
+      </div>
+      <div
+        style={{ fontSize: "0.7rem", color: "#7a6a50", lineHeight: "1.4", cursor: cleanText.length > 100 ? "pointer" : "default" }}
+        onClick={() => cleanText.length > 100 && setExpanded(e => !e)}
+      >
+        {expanded ? cleanText : preview}
+      </div>
+    </div>
+  );
+}
+
+// ── Conversation card — gestisce sia singolo messaggio che thread ─────────────
+
+function ConversationCard({ thread, apartments, bookings, aptRules, onMarkDone }) {
+  const [showHistory, setShowHistory] = useState(false);
   const [copied,      setCopied]      = useState(false);
 
-  const realApts   = apartments.filter(a => a.id !== "all");
-  const cleanText  = looksLikeHtml(item.raw_text)
-    ? stripHtml(item.raw_text)
-    : (item.raw_text ?? "");
+  const { latestMessage: item, isThread, messageCount, messages, allIds } = thread;
+  const realApts  = apartments.filter(a => a.id !== "all");
+  const cleanText = looksLikeHtml(item.raw_text) ? stripHtml(item.raw_text) : (item.raw_text ?? "");
 
   const candidateTitle = extractListingTitle(item.raw_metadata);
   const aptId =
@@ -77,14 +109,21 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
       aptRules,
     });
   } catch (e) {
-    console.error("[MessageCard] buildAgentContext:", e);
+    console.error("[ConversationCard] buildAgentContext:", e);
   }
 
   const responseText = context ? generateGuestReply(context) : null;
-  const subitoLink   = extractSubitoLink(item.raw_metadata, cleanText);
-  const apt          = realApts.find(a => a.id === aptId);
-  const color        = STATUS_COLORS[item.status] ?? "#c9a96e";
-  const isNew        = ["new", "processing"].includes(item.status);
+
+  // Subito link: cerca in tutti i messaggi del thread, dal più recente
+  const subitoLink = [...messages].reverse().reduce((found, msg) => {
+    if (found) return found;
+    const t = looksLikeHtml(msg.raw_text) ? stripHtml(msg.raw_text) : (msg.raw_text ?? "");
+    return extractSubitoLink(msg.raw_metadata, t);
+  }, null);
+
+  const apt         = realApts.find(a => a.id === aptId);
+  const color       = STATUS_COLORS[item.status] ?? "#c9a96e";
+  const isActive    = thread.hasNewMessages;
   const decisionType = context?.decision?.type;
   const avail        = context?.availability;
   const pricing      = context?.pricing;
@@ -110,6 +149,9 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
     fontWeight: "600", border: "none",
   };
 
+  // Messaggi storici = tutti tranne l'ultimo
+  const historyMessages = messages.slice(0, -1);
+
   return (
     <div style={{
       background: "#120f0a",
@@ -120,7 +162,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
       marginBottom: "0.6rem",
     }}>
 
-      {/* ── Header: source + status + decision + data ── */}
+      {/* ── Header: source + status + decision + thread badge + data ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.45rem", gap: "0.5rem", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ background: "#2a2010", color: "#c9a96e", border: "1px solid #c9a96e33", borderRadius: "20px", padding: "0.1rem 0.5rem", fontSize: "0.63rem", fontWeight: "700", textTransform: "uppercase", fontFamily: "'Playfair Display',serif" }}>
@@ -132,6 +174,12 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           {decisionType && (
             <span style={{ background: (DECISION_COLORS[decisionType] ?? "#8a7a60") + "22", color: DECISION_COLORS[decisionType] ?? "#8a7a60", border: "1px solid " + (DECISION_COLORS[decisionType] ?? "#8a7a60") + "44", borderRadius: "20px", padding: "0.1rem 0.5rem", fontSize: "0.63rem" }}>
               {DECISION_LABELS[decisionType] ?? decisionType}
+            </span>
+          )}
+          {/* Thread badge — mostra solo se ci sono più messaggi */}
+          {isThread && (
+            <span style={{ background: "#1a2a3a", color: "#6ea0c9", border: "1px solid #6ea0c933", borderRadius: "20px", padding: "0.1rem 0.5rem", fontSize: "0.63rem", fontWeight: "700" }}>
+              💬 {messageCount} messaggi
             </span>
           )}
         </div>
@@ -150,7 +198,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           <span style={{ fontSize: "0.68rem", color: "#c96e6e" }}>⚠️ Appartamento non riconosciuto</span>
         ) : null}
         {periodText && <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>📅 {periodText}</span>}
-        {guests    && <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>👤 {guests} ospiti</span>}
+        {guests     && <span style={{ fontSize: "0.68rem", color: "#8a7a60" }}>👤 {guests} ospiti</span>}
         {avail && checkin && (
           <span style={{ fontSize: "0.68rem", fontWeight: "700", color: avail.isAvailable ? "#6ec99a" : "#c96e6e" }}>
             {avail.isAvailable ? "✓ Libero" : "✗ Occupato"}
@@ -161,7 +209,7 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
         )}
       </div>
 
-      {/* ── Risposta suggerita — HERO, sempre completamente visibile ── */}
+      {/* ── Risposta suggerita (sull'ultimo messaggio del thread) ── */}
       {responseText && (
         <div style={{
           fontSize: "0.78rem", color: "#a0d8a0", lineHeight: "1.55",
@@ -170,16 +218,15 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           whiteSpace: "pre-wrap",
         }}>
           <div style={{ fontSize: "0.58rem", color: "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: "0.35rem", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
-            Risposta suggerita
+            Risposta suggerita {isThread ? "(ultimo messaggio)" : ""}
           </div>
           {responseText}
         </div>
       )}
 
-      {/* ── Action bar principale ── */}
+      {/* ── Action bar ── */}
       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
 
-        {/* 1. Copia risposta */}
         {responseText ? (
           <button
             onClick={handleCopy}
@@ -190,7 +237,6 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           <span style={{ fontSize: "0.65rem", color: "#3a3020" }}>Risposta non disponibile</span>
         )}
 
-        {/* 2. Apri Subito */}
         {subitoLink ? (
           <a
             href={subitoLink}
@@ -203,31 +249,50 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
           <span style={{ fontSize: "0.63rem", color: "#3a3020", fontStyle: "italic" }}>🔗 Link non disponibile</span>
         )}
 
-        {/* 3. Segna come gestito — push a destra */}
-        {isNew && (
+        {isActive && (
           <button
-            onClick={() => onMarkDone(item.id)}
+            onClick={() => onMarkDone(allIds)}
             style={{ ...btnPrimary, background: "#0a1a0a", color: "#6ec99a", border: "1px solid #6ec99a33", marginLeft: "auto" }}>
-            ✓ Segna gestito
+            ✓ {isThread ? "Segna trattativa gestita" : "Segna gestito"}
           </button>
         )}
       </div>
 
-      {/* ── Testo cliente — secondario, collassato ── */}
+      {/* ── Testo ultimo messaggio (collassato) ── */}
       {cleanText && (
         <div style={{ marginTop: "0.45rem" }}>
           <button
-            onClick={() => setShowMessage(m => !m)}
+            onClick={() => setShowHistory(h => !h)}
             style={{ background: "none", border: "none", color: "#3a2a18", fontSize: "0.6rem", cursor: "pointer", padding: 0, fontFamily: "Georgia,serif" }}>
-            {showMessage ? "▲ Nascondi messaggio" : "▼ Messaggio ricevuto"}
+            {showHistory
+              ? "▲ Nascondi"
+              : isThread
+                ? `▼ Storico conversazione (${messageCount} messaggi)`
+                : "▼ Messaggio ricevuto"}
           </button>
-          {showMessage && (
+          {showHistory && (
             <div style={{
-              fontSize: "0.73rem", color: "#8a7a50", lineHeight: "1.45",
-              background: "#0d0a07", borderRadius: "6px", padding: "0.4rem 0.6rem",
-              marginTop: "0.3rem", whiteSpace: "pre-wrap",
+              marginTop: "0.4rem",
+              paddingTop: "0.4rem",
+              borderTop: "1px solid #2a2010",
             }}>
-              {cleanText}
+              {/* Messaggi storici — dal più vecchio al più recente */}
+              {isThread && historyMessages.length > 0 && (
+                <div style={{ marginBottom: "0.5rem" }}>
+                  {historyMessages.map(msg => (
+                    <HistoryMessageRow key={msg.id} msg={msg} />
+                  ))}
+                </div>
+              )}
+              {/* Testo ultimo messaggio */}
+              <div style={{
+                fontSize: "0.73rem", color: "#8a7a50", lineHeight: "1.45",
+                background: "#0d0a07", borderRadius: "6px", padding: "0.4rem 0.6rem",
+                whiteSpace: "pre-wrap",
+              }}>
+                {isThread && <div style={{ fontSize: "0.58rem", color: "#5a4a30", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>Ultimo messaggio</div>}
+                {cleanText}
+              </div>
             </div>
           )}
         </div>
@@ -236,15 +301,23 @@ function MessageCard({ item, apartments, bookings, aptRules, onMarkDone }) {
   );
 }
 
-export default function MessaggiSection({ apartments, bookings, inbox, aptRules, agentLoading, updateInboxStatus }) {
+// ── Sezione principale ────────────────────────────────────────────────────────
+
+export default function MessaggiSection({ apartments, bookings, inbox, aptRules, agentLoading, updateInboxStatus, markThreadReplied }) {
   const [tab, setTab] = useState("nuovi");
 
-  const nuovi   = inbox.filter(i => ["new", "processing"].includes(i.status));
-  const gestiti = inbox.filter(i => !["new", "processing"].includes(i.status));
+  const threads  = groupInboxByThread(inbox ?? []);
+  const nuovi    = threads.filter(t => t.hasNewMessages);
+  const gestiti  = threads.filter(t => !t.hasNewMessages);
   const displayed = tab === "nuovi" ? nuovi : gestiti;
 
-  async function handleMarkDone(id) {
-    await updateInboxStatus(id, "replied");
+  async function handleMarkDone(ids) {
+    if (markThreadReplied) {
+      await markThreadReplied(ids);
+    } else {
+      // fallback per backward compat
+      for (const id of ids) await updateInboxStatus(id, "replied");
+    }
   }
 
   return (
@@ -299,11 +372,11 @@ export default function MessaggiSection({ apartments, bookings, inbox, aptRules,
         </div>
       )}
 
-      {/* Cards */}
-      {displayed.map(item => (
-        <MessageCard
-          key={item.id}
-          item={item}
+      {/* Conversation cards */}
+      {displayed.map(thread => (
+        <ConversationCard
+          key={thread.threadId}
+          thread={thread}
           apartments={apartments}
           bookings={bookings ?? []}
           aptRules={aptRules}
