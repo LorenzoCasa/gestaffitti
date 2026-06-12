@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  agent-webhook — Sprint B1.1
+//  agent-webhook — Sprint C1.1
 //  Riceve richieste da sorgenti esterne e le scrive in agent_inbox.
 //
 //  Sicurezza: Bearer token statico (WEBHOOK_SECRET).
@@ -9,6 +9,12 @@
 //    Se esiste già (source + source_message_id): 200 { result: "duplicate" }
 //    Se INSERT va in race-condition 23505: 200 { result: "duplicate" }
 //    Se creato: 201 { result: "created", id }
+//
+//  Thread ID (C1.1):
+//    source_thread_id viene popolato automaticamente dal Conversation ID
+//    estratto dai link Subito presenti nell'HTML o nel testo.
+//    Formato: "subito_<numericId>"  es. "subito_123456789"
+//    Priorità: payload.source_thread_id esplicito → Conv ID da html/text → null
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -42,6 +48,19 @@ function isCustomerMessage(subject: string): boolean {
 
 function looksLikeHtml(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(text);
+}
+
+// Estrae il Conversation ID Subito da un testo (HTML o plain).
+// Riconosce tutti i path usati da Subito nelle email di notifica:
+//   /messaggi/<id>/
+//   /my-messages/<id>/
+//   /il-mio-profilo/messaggi/<id>/
+// Restituisce "subito_<id>" oppure null.
+const SUBITO_CONV_RE = /subito\.it\/(?:messaggi|my-messages|il-mio-profilo\/messaggi)\/(\d+)/i;
+function extractSubitoConvId(html: string | null, text: string): string | null {
+  const candidate = html ?? text ?? "";
+  const match = candidate.match(SUBITO_CONV_RE);
+  return match ? `subito_${match[1]}` : null;
 }
 
 function stripHtml(html: string): string {
@@ -138,6 +157,16 @@ serve(async (req: Request) => {
     ...(htmlBody !== null ? { html_body: htmlBody } : {}),
   };
 
+  // 5d. Determina source_thread_id
+  //   Priorità: payload esplicito → Conv ID estratto da html/text → null
+  const sourceThreadId: string | null =
+    payload.source_thread_id?.trim() ||
+    extractSubitoConvId(htmlBody, cleanText) ||
+    null;
+  if (sourceThreadId) {
+    console.log(`[webhook] thread_id: ${sourceThreadId}`);
+  }
+
   // 6. Supabase client (service-role — bypassa RLS)
   const supabaseUrl    = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -173,7 +202,7 @@ serve(async (req: Request) => {
     .insert({
       source,
       source_message_id:     sourceMessageId,
-      source_thread_id:      payload.source_thread_id?.trim() ?? null,
+      source_thread_id:      sourceThreadId,
       raw_text:              cleanText,
       raw_metadata:          enrichedMetadata,
       status:                "new",
