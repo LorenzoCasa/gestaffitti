@@ -48,6 +48,20 @@ export default function useAgentData(user) {
       setInbox(prev => prev.map(m => m.id === id ? { ...m, status, updated_at } : m));
   };
 
+  // Marks all messages in a thread as replied in a single DB call.
+  const markThreadReplied = async (ids) => {
+    if (!ids?.length) return;
+    const updated_at = new Date().toISOString();
+    const { error } = await supabase
+      .from("agent_inbox")
+      .update({ status: "replied", updated_at })
+      .in("id", ids);
+    if (!error)
+      setInbox(prev => prev.map(m =>
+        ids.includes(m.id) ? { ...m, status: "replied", updated_at } : m
+      ));
+  };
+
   // ── agent_decisions ──────────────────────────────────────────────────────────
 
   const addDecision = async (inboxId, decision) => {
@@ -118,6 +132,7 @@ export default function useAgentData(user) {
     loadAgentData,
     addInboxMessage,
     updateInboxStatus,
+    markThreadReplied,
     addDecision,
     approveDecision,
     upsertAptRule,

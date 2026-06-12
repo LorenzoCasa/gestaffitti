@@ -18,7 +18,7 @@ import useAgentData from "./hooks/useAgentData";
 // ────────────────────────────────────────────
 //  OWNER VIEW
 // ────────────────────────────────────────────
-function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment,categories,inbox,aptRules,agentLoading,updateInboxStatus}) {
+function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDeleteBooking,onToggleCleaning,onToggleCheckin,onToggleDeposit,onAddExpense,onUpdateExpense,onDeleteExpense,onToggleExpensePaid,onLogout,apartments,onAddApartment,onUpdateApartment,onDeleteApartment,categories,inbox,aptRules,agentLoading,updateInboxStatus,markThreadReplied}) {
   const now = new Date();
   const aptColor=(id)=>{ if(id==="property") return "#8a7a60"; return apartments.find(a=>a.id===id)?.color||"#c9a96e"; };
   const aptLabel=(id)=>{ if(id==="property") return "Immobile / Comune"; return apartments.find(a=>a.id===id)?.label||id; };
@@ -309,7 +309,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 
         {/* MESSAGGI */}
         {section==="messaggi"&&(
-          <MessaggiSection user={user} apartments={apartments} bookings={bookings} inbox={inbox??[]} aptRules={aptRules??[]} agentLoading={agentLoading} updateInboxStatus={updateInboxStatus}/>
+          <MessaggiSection user={user} apartments={apartments} bookings={bookings} inbox={inbox??[]} aptRules={aptRules??[]} agentLoading={agentLoading} updateInboxStatus={updateInboxStatus} markThreadReplied={markThreadReplied}/>
         )}
 
         {/* IMPOSTAZIONI */}
@@ -343,7 +343,7 @@ export default function App() {
     addExpense, updateExpense, deleteExpense, toggleExpensePaid,
     addApartment, updateApartment, deleteApartment,
   } = useSupabaseData();
-  const { inbox, aptRules, agentLoading, updateInboxStatus } = useAgentData(user);
+  const { inbox, aptRules, agentLoading, updateInboxStatus, markThreadReplied } = useAgentData(user);
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginScreen profileError={profileError} />;
@@ -366,7 +366,7 @@ export default function App() {
       onLogout={handleLogout}
       apartments={apartments} onAddApartment={addApartment} onUpdateApartment={updateApartment} onDeleteApartment={deleteApartment}
       categories={categories}
-      inbox={inbox} aptRules={aptRules} agentLoading={agentLoading} updateInboxStatus={updateInboxStatus}
+      inbox={inbox} aptRules={aptRules} agentLoading={agentLoading} updateInboxStatus={updateInboxStatus} markThreadReplied={markThreadReplied}
     />
   );
 }
