@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { stripHtml, looksLikeHtml, extractSubitoLink } from "../../../utils/stripHtml";
+import { stripHtml, looksLikeHtml, extractSubitoLink, extractGuestName } from "../../../utils/stripHtml";
 import { resolveListingFromTitle, extractListingTitle } from "../../../utils/agentListingResolver";
 import { buildAgentContext } from "../../../utils/buildAgentContext";
 import { generateGuestReply } from "../../../utils/generateGuestReply";
@@ -82,6 +82,11 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
   const { latestMessage: item, isThread, messageCount, messages, allIds } = thread;
   const realApts  = apartments.filter(a => a.id !== "all");
   const cleanText = looksLikeHtml(item.raw_text) ? stripHtml(item.raw_text) : (item.raw_text ?? "");
+
+  const guestName = extractGuestName(item.raw_metadata, cleanText)
+    ?? thread.parsed_guest_name
+    ?? null;
+  const displayName = guestName ?? "Cliente Subito";
 
   const candidateTitle = extractListingTitle(item.raw_metadata);
   const aptId =
@@ -194,6 +199,11 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
         <span style={{ color: "#4a3a20", fontSize: "0.6rem", flexShrink: 0 }}>
           {fmtDatetime(item.created_at)}
         </span>
+      </div>
+
+      {/* ── Nome richiedente ── */}
+      <div style={{ fontSize: "0.88rem", color: "#e8d5b0", fontWeight: "600", marginBottom: "0.3rem" }}>
+        {displayName}
       </div>
 
       {/* ── Meta: apt + periodo + ospiti + disponibilità + prezzo ── */}

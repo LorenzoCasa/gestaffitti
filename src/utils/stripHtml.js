@@ -58,3 +58,40 @@ export function extractSubitoLink(rawMetadata, rawText) {
 
   return null;
 }
+
+// ── extractGuestName ──────────────────────────────────────────────────────────
+
+const EMAIL_NAME_RE = /^([^<@\n]+?)\s*<[^>]+>/;
+const SUBITO_SENT_RE = /([A-ZÀÈÉÌÒÙ][a-zàèéìòùì]+(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòùì]+)+)\s+ha inviato il seguente messaggio/i;
+const SUBITO_FROM_RE = /^(?:Da|From|Mittente):\s*([A-ZÀÈÉÌÒÙ][a-zàèéìòùì]+(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòùì]+)+)/m;
+
+/**
+ * Tenta di estrarre il nome del mittente da raw_metadata e raw_text.
+ * Restituisce null se non trovato (il chiamante mostra il fallback).
+ */
+export function extractGuestName(rawMetadata, rawText) {
+  const meta = rawMetadata ?? {};
+
+  // Campi diretti nel metadata
+  for (const field of ["from_name", "sender_name", "guest_name", "contact_name"]) {
+    if (typeof meta[field] === "string" && meta[field].trim()) return meta[field].trim();
+  }
+
+  // "Nome Cognome <email>" oppure solo nome nel campo from/sender
+  const fromField = meta.from ?? meta.sender ?? meta.reply_to ?? null;
+  if (typeof fromField === "string") {
+    const m = fromField.match(EMAIL_NAME_RE);
+    if (m) return m[1].trim();
+    if (!fromField.includes("@") && fromField.trim().length > 1) return fromField.trim();
+  }
+
+  // Pattern nel testo Subito
+  if (rawText) {
+    const m1 = rawText.match(SUBITO_SENT_RE);
+    if (m1) return m1[1].trim();
+    const m2 = rawText.match(SUBITO_FROM_RE);
+    if (m2) return m2[1].trim();
+  }
+
+  return null;
+}
