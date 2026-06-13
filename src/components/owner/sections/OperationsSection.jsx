@@ -39,7 +39,6 @@ export default function OperationsSection({ filteredBookings, aptColor, aptLabel
   }
 
   const sectionTitle = { fontFamily: "'Playfair Display',serif", fontSize: "0.82rem", color: "#8a7a60", marginBottom: "0.45rem", marginTop: "0.9rem", letterSpacing: "0.04em", textTransform: "uppercase" };
-  const emptyNote = { color: "#4a3a20", fontSize: "0.75rem", fontStyle: "italic", padding: "0.3rem 0" };
 
   return (
     <div>
@@ -47,14 +46,22 @@ export default function OperationsSection({ filteredBookings, aptColor, aptLabel
         Pulizie & Check-in/out
       </h2>
 
+      {filteredBookings.length === 0 && (
+        <p style={{ color: "#5a4a30" }}>Nessuna prenotazione.</p>
+      )}
+
       {/* Arrivi in attesa */}
-      <div style={sectionTitle}>🔑 Arrivi in attesa ({pendingCheckin.length})</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-        {pendingCheckin.length === 0
-          ? <p style={emptyNote}>Nessun arrivo in attesa.</p>
-          : pendingCheckin.map(b => <BookingCard key={b.id} b={b} showCheckin showCleaning={false} />)
-        }
-      </div>
+      {filteredBookings.length > 0 && (
+        <>
+          <div style={sectionTitle}>🔑 Arrivi in attesa ({pendingCheckin.length})</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {pendingCheckin.length === 0
+              ? <p style={{ color: "#4a3a20", fontSize: "0.75rem", fontStyle: "italic", padding: "0.3rem 0" }}>Nessun arrivo in attesa.</p>
+              : pendingCheckin.map(b => <BookingCard key={b.id} b={b} showCheckin showCleaning={false} />)
+            }
+          </div>
+        </>
+      )}
 
       {/* Ospiti già entrati */}
       {checkedIn.length > 0 && (
@@ -76,10 +83,6 @@ export default function OperationsSection({ filteredBookings, aptColor, aptLabel
             {pendingCleaning.map(b => <BookingCard key={b.id} b={b} showCheckin={false} showCleaning />)}
           </div>
         </>
-      )}
-
-      {filteredBookings.length === 0 && (
-        <p style={{ color: "#5a4a30" }}>Nessuna prenotazione.</p>
       )}
     </div>
   );
