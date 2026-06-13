@@ -1,0 +1,64 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+
+      "Bash(pwd)",
+      "Bash(ls)",
+      "Bash(ls *)",
+
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log)",
+      "Bash(git log *)",
+      "Bash(git branch)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+
+      "Bash(git push -u origin *)",
+
+      "Bash(npm run build)",
+      "Bash(npm run test)",
+      "Bash(npm test)",
+      "Bash(npm test --if-present)",
+      "Bash(npm run lint)",
+      "Bash(npm run dev)"
+    ],
+    "ask": [
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npx *)",
+      "Bash(git merge *)",
+      "Bash(vercel *)",
+      "Bash(supabase *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main*)",
+      "Bash(git push -u origin main*)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd *)",
+
+      "Bash(supabase db push *)",
+      "Bash(supabase migration *)",
+      "Bash(supabase functions deploy *)",
+      "Bash(vercel --prod *)",
+      "Bash(vercel deploy --prod *)"
+    ]
+  }
+}
