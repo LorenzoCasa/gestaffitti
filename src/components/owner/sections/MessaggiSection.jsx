@@ -75,7 +75,7 @@ function HistoryMessageRow({ msg }) {
 
 // ── Conversation card — gestisce sia singolo messaggio che thread ─────────────
 
-function ConversationCard({ thread, apartments, bookings, aptRules, onMarkDone }) {
+function ConversationCard({ thread, apartments, bookings, aptRules, decisions, onMarkDone }) {
   const [showHistory, setShowHistory] = useState(false);
   const [copied,      setCopied]      = useState(false);
 
@@ -112,7 +112,15 @@ function ConversationCard({ thread, apartments, bookings, aptRules, onMarkDone }
     console.error("[ConversationCard] buildAgentContext:", e);
   }
 
-  const responseText = context ? generateGuestReply(context) : null;
+  const templateText = context ? generateGuestReply(context) : null;
+
+  // Cerca la risposta suggerita salvata in agent_decisions dall'LLM
+  const agentDecision = decisions?.find(d => d.inbox_id === item.id);
+  const llmText       = agentDecision?.suggested_text || null;
+  const isLlmGenerated = llmText && !agentDecision?.payload?.llm_failed;
+
+  // Testo da mostrare: LLM se disponibile, altrimenti template deterministico
+  const responseText = llmText ?? templateText;
 
   // Subito link: cerca in tutti i messaggi del thread, dal più recente
   const subitoLink = [...messages].reverse().reduce((found, msg) => {
@@ -217,8 +225,8 @@ function ConversationCard({ thread, apartments, bookings, aptRules, onMarkDone }
           borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.55rem",
           whiteSpace: "pre-wrap",
         }}>
-          <div style={{ fontSize: "0.58rem", color: "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: "0.35rem", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
-            Risposta suggerita {isThread ? "(ultimo messaggio)" : ""}
+          <div style={{ fontSize: "0.58rem", color: isLlmGenerated ? "#6a9a9a" : "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: "0.35rem", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
+            {isLlmGenerated ? "✨ Risposta Claude" : `Risposta suggerita${isThread ? " (ultimo messaggio)" : ""}`}
           </div>
           {responseText}
         </div>
@@ -303,7 +311,7 @@ function ConversationCard({ thread, apartments, bookings, aptRules, onMarkDone }
 
 // ── Sezione principale ────────────────────────────────────────────────────────
 
-export default function MessaggiSection({ apartments, bookings, inbox, aptRules, agentLoading, updateInboxStatus, markThreadReplied }) {
+export default function MessaggiSection({ apartments, bookings, inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied }) {
   const [tab, setTab] = useState("nuovi");
 
   const threads  = groupInboxByThread(inbox ?? []);
@@ -380,6 +388,7 @@ export default function MessaggiSection({ apartments, bookings, inbox, aptRules,
           apartments={apartments}
           bookings={bookings ?? []}
           aptRules={aptRules}
+          decisions={decisions ?? []}
           onMarkDone={handleMarkDone}
         />
       ))}
