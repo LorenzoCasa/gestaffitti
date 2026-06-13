@@ -116,7 +116,7 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
 
   // Cerca la risposta suggerita salvata in agent_decisions dall'LLM
   const agentDecision = decisions?.find(d => d.inbox_id === item.id);
-  const llmText       = agentDecision?.suggested_text ?? null;
+  const llmText       = agentDecision?.suggested_text || null;
   const isLlmGenerated = llmText && !agentDecision?.payload?.llm_failed;
 
   // Testo da mostrare: LLM se disponibile, altrimenti template deterministico
