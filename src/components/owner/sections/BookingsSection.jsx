@@ -10,10 +10,19 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [bForm, setBForm] = useState(emptyBooking);
+  const [tab, setTab] = useState("arrivo");
 
   const commPct = COMMISSIONS[bForm.platform] || 0;
   const commAmt = bForm.price ? Math.round(Number(bForm.price) * commPct / 100) : 0;
   const nettoRicevuto = bForm.price ? Math.round(Number(bForm.price) * (1 - commPct / 100)) : 0;
+
+  // Split: "In arrivo" = non ancora entrati; "Arrivati" = check-in effettuato
+  const inArrivo = filteredBookings.filter(b => !b.checkinDone);
+  const arrivati = filteredBookings
+    .filter(b => b.checkinDone)
+    .sort((a, b) => a.checkin > b.checkin ? -1 : 1); // più recente prima
+
+  const displayed = tab === "arrivo" ? inArrivo : arrivati;
 
   function openAdd() {
     if (realApts.length === 0) { alert("Nessun appartamento configurato. Aggiungine uno in Impostazioni."); return; }
@@ -40,27 +49,69 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
     setBForm(emptyBooking);
   }
 
+  const tabBtn = (id, label, count) => {
+    const active = tab === id;
+    return (
+      <button
+        key={id}
+        onClick={() => setTab(id)}
+        style={{
+          background: active ? "#2a2010" : "#120f0a",
+          border: active ? "1px solid #c9a96e55" : "1px solid #2a2010",
+          borderRadius: "20px", padding: "0.3rem 0.85rem",
+          color: active ? "#c9a96e" : "#5a4a30",
+          fontSize: "0.7rem", fontFamily: "'Playfair Display',serif",
+          cursor: "pointer", whiteSpace: "nowrap",
+        }}>
+        {label}
+        {count > 0 && (
+          <span style={{ marginLeft: "0.35rem", background: active ? "#c9a96e22" : "#1a1a1a", borderRadius: "10px", padding: "0 0.35rem", fontSize: "0.6rem" }}>
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <>
       <div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.9rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.75rem"}}>
           <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.2rem",margin:0}}>Prenotazioni</h2>
           <button onClick={openAdd} style={btnP}>+ Nuova</button>
         </div>
+
+        {/* Tab In arrivo / Arrivati */}
+        <div style={{display:"flex",gap:"0.3rem",marginBottom:"0.9rem"}}>
+          {tabBtn("arrivo",  "In arrivo",  inArrivo.length)}
+          {tabBtn("arrivati","Arrivati",   arrivati.length)}
+        </div>
+
         <div style={{display:"flex",flexDirection:"column",gap:"0.6rem"}}>
-          {filteredBookings.length===0&&<p style={{color:"#5a4a30"}}>Nessuna prenotazione.</p>}
-          {filteredBookings.map(b=>{
-            const nights=nightCount(b.checkin,b.checkout);
-            const isActive=b.checkin<=today&&b.checkout>today;
-            const isPast=b.checkout<=today;
-            return(
+          {displayed.length === 0 && (
+            <p style={{color:"#5a4a30",fontSize:"0.8rem"}}>
+              {tab === "arrivo" ? "Nessun cliente in arrivo." : "Nessun accesso registrato."}
+            </p>
+          )}
+          {displayed.map(b => {
+            const nights = nightCount(b.checkin, b.checkout);
+            const isActive = b.checkin <= today && b.checkout > today;
+            const isPast = b.checkout <= today;
+            return (
               <div key={b.id} style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.85rem 0.9rem",borderLeft:`3px solid ${aptColor(b.apt)}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"0.5rem"}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:"0.45rem",marginBottom:"0.2rem",flexWrap:"wrap"}}>
                       <span style={{color:"#e8d5b0",fontWeight:"600",fontSize:"0.92rem"}}>{b.guest}</span>
-                      {isActive&&<span style={{background:"#6ec99a22",color:"#6ec99a",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ec99a44"}}>In corso</span>}
-                      {isPast&&<span style={{background:"#3a3020",color:"#6a5a40",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px"}}>Conclusa</span>}
+                      {b.checkinDone && (
+                        <span style={{background:"#1a2a1a",color:"#6ec99a",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ec99a44"}}>✓ Entrato</span>
+                      )}
+                      {!b.checkinDone && isActive && (
+                        <span style={{background:"#6ea0c922",color:"#6ea0c9",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ea0c944"}}>In corso</span>
+                      )}
+                      {isPast && !b.checkinDone && (
+                        <span style={{background:"#3a3020",color:"#6a5a40",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px"}}>Conclusa</span>
+                      )}
                     </div>
                     <div style={{color:"#6a5a40",fontSize:"0.72rem",marginBottom:"0.18rem"}}>📅 {formatDate(b.checkin)} → {formatDate(b.checkout)} · {nights}n</div>
                     <div style={{color:"#6a5a40",fontSize:"0.72rem",marginBottom:"0.3rem"}}>🏠 {aptLabel(b.apt)} · 📲 {b.platform}</div>
