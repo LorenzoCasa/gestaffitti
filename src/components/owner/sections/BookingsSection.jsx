@@ -16,10 +16,12 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
   const commAmt = bForm.price ? Math.round(Number(bForm.price) * commPct / 100) : 0;
   const nettoRicevuto = bForm.price ? Math.round(Number(bForm.price) * (1 - commPct / 100)) : 0;
 
-  // Split: "In arrivo" = non ancora entrati; "Arrivati" = check-in effettuato
-  const inArrivo = filteredBookings.filter(b => !b.checkinDone);
+  // "Arrivati" = checkinDone manuale OPPURE data check-in già passata
+  // "In arrivo" = check-in oggi o futuro, e non ancora marcato entrato
+  const isArrived = (b) => b.checkinDone || b.checkin < today;
+  const inArrivo = filteredBookings.filter(b => !isArrived(b));
   const arrivati = filteredBookings
-    .filter(b => b.checkinDone)
+    .filter(b => isArrived(b))
     .sort((a, b) => a.checkin > b.checkin ? -1 : 1); // più recente prima
 
   const displayed = tab === "arrivo" ? inArrivo : arrivati;
@@ -106,11 +108,11 @@ export default function BookingsSection({ filteredBookings, realApts, aptColor, 
                       {b.checkinDone && (
                         <span style={{background:"#1a2a1a",color:"#6ec99a",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ec99a44"}}>✓ Entrato</span>
                       )}
-                      {!b.checkinDone && isActive && (
-                        <span style={{background:"#6ea0c922",color:"#6ea0c9",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ea0c944"}}>In corso</span>
+                      {!b.checkinDone && b.checkin < today && (
+                        <span style={{background:"#2a1a08",color:"#c9906e",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #c9906e44"}}>⚠ Check-in passato</span>
                       )}
-                      {isPast && !b.checkinDone && (
-                        <span style={{background:"#3a3020",color:"#6a5a40",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px"}}>Conclusa</span>
+                      {!b.checkinDone && isActive && b.checkin >= today && (
+                        <span style={{background:"#6ea0c922",color:"#6ea0c9",fontSize:"0.58rem",padding:"0.1rem 0.4rem",borderRadius:"20px",border:"1px solid #6ea0c944"}}>In corso</span>
                       )}
                     </div>
                     <div style={{color:"#6a5a40",fontSize:"0.72rem",marginBottom:"0.18rem"}}>📅 {formatDate(b.checkin)} → {formatDate(b.checkout)} · {nights}n</div>
