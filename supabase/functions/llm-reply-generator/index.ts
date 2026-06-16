@@ -1124,9 +1124,15 @@ serve(async (req: Request) => {
   // ── Avvia elaborazione in background e rispondi subito a pg_net ────────
   // Il Supabase Database Webhook (pg_net) ha un timeout di 5s, mentre
   // l'elaborazione completa (Anthropic API) richiede 10-25s.
-  // Rispondendo 202 subito evitiamo il timeout, l'elaborazione continua
-  // nel Deno Edge Runtime dopo che la risposta HTTP è stata inviata.
-  processInboxRecord({
+  // Rispondendo 202 subito evitiamo il timeout.
+  //
+  // CRITICO: si usa EdgeRuntime.waitUntil() per garantire che il task
+  // background completi DOPO che la risposta HTTP è stata inviata.
+  // Senza waitUntil, il Deno Edge Runtime può terminare il processo
+  // non appena la Response viene consumata, killando il background task.
+  // Con waitUntil, il runtime mantiene il processo vivo fino al resolve.
+  // Il fallback .catch() gestisce gli errori senza propagarli al caller.
+  const bgPromise = processInboxRecord({
     inboxId,
     rawText,
     rawMetadata,
@@ -1140,6 +1146,9 @@ serve(async (req: Request) => {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[llm-reply-generator] Background processing failed for ${inboxId}: ${errMsg}`);
   });
+
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime?.waitUntil?.(bgPromise);
 
   return json({ result: "accepted", inbox_id: inboxId }, 202);
 });
