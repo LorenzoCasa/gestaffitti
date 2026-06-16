@@ -945,8 +945,10 @@ async function upgradeTolLMReply(opts: {
   supabaseUrl: string;
   serviceRoleKey: string;
   inboxId: string;
+  rawDecisionType: string;
+  normalizedDecisionType: string;
 }): Promise<void> {
-  const { decisionId, context, rawText, anthropicApiKey, llmModel, supabaseUrl, serviceRoleKey, inboxId } = opts;
+  const { decisionId, context, rawText, anthropicApiKey, llmModel, supabaseUrl, serviceRoleKey, inboxId, rawDecisionType, normalizedDecisionType } = opts;
 
   console.log(`[llm-reply-generator] LLM upgrade started for decision ${decisionId}`);
 
@@ -985,9 +987,11 @@ async function upgradeTolLMReply(opts: {
         llm_prompt_tokens: inputTokens,
         llm_completion_tokens: outputTokens,
         stage: "llm_generated",
+        raw_decision_type: rawDecisionType,
+        normalized_decision_type: normalizedDecisionType,
         apt_id_resolved: context.apartment.id || null,
         context_snapshot: {
-          decision_type: context.decision.type,
+          decision_type: rawDecisionType,
           availability_status: context.availability.isAvailable,
           pricing_total: context.pricing.totalPrice,
           alternatives_count: context.alternatives.count,
@@ -1119,17 +1123,28 @@ Deno.serve(async (req: Request) => {
 
   // 4. Build context + risposta deterministica
   const context = buildAgentContext({ aptId, source, rawText, rawMetadata, apartments, bookings, aptRules });
-  const decisionType = context.decision.type;
+  const rawDecisionType = context.decision.type;
   const deterministicText = generateGuestReply(context);
 
-  console.log(`[llm-reply-generator] decision_type: ${decisionType} — inserting deterministic reply`);
+  // Il motore può produrre tipi logici non ammessi dal CHECK constraint DB
+  // (es. "outside_rules", "full_month"). Si normalizzano verso "manual_review"
+  // solo per il campo DB; il valore originale è conservato in payload.
+  const ALLOWED_DECISION_TYPES = new Set([
+    "available", "unavailable", "partially_available",
+    "needs_info", "price_negotiation", "manual_review",
+  ]);
+  const normalizedDecisionType: string = ALLOWED_DECISION_TYPES.has(rawDecisionType)
+    ? rawDecisionType
+    : "manual_review";
+
+  console.log(`[llm-reply-generator] decision_type: ${rawDecisionType} → DB: ${normalizedDecisionType} — inserting deterministic reply`);
 
   // 5. INSERT agent_decisions con risposta deterministica
   const { data: insertedDecision, error: insertError } = await supabase
     .from("agent_decisions")
     .insert({
       inbox_id: inboxId,
-      decision_type: decisionType,
+      decision_type: normalizedDecisionType,
       suggested_text: deterministicText,
       was_modified: false,
       response_text: null,
@@ -1140,9 +1155,11 @@ Deno.serve(async (req: Request) => {
         llm_prompt_tokens: null,
         llm_completion_tokens: null,
         stage: "deterministic_created",
+        raw_decision_type: rawDecisionType,
+        normalized_decision_type: normalizedDecisionType,
         apt_id_resolved: aptId || null,
         context_snapshot: {
-          decision_type: decisionType,
+          decision_type: rawDecisionType,
           availability_status: context.availability.isAvailable,
           pricing_total: context.pricing.totalPrice,
           alternatives_count: context.alternatives.count,
@@ -1185,6 +1202,8 @@ Deno.serve(async (req: Request) => {
       supabaseUrl,
       serviceRoleKey,
       inboxId,
+      rawDecisionType,
+      normalizedDecisionType,
     }).catch((err) => {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error(`[llm-reply-generator] LLM upgrade failed for ${inboxId}: ${errMsg}`);
