@@ -20,6 +20,14 @@
 //    supabase functions deploy llm-reply-generator \
 //      --no-verify-jwt \
 //      --project-ref rkhxbjrfjwavwhehtavg
+//
+//  NOTA ARCHITETTURALE:
+//  Il Supabase Database Webhook usa pg_net con timeout di 5s.
+//  L'elaborazione (Supabase queries + Anthropic API) può richiedere 10-25s.
+//  Soluzione: la funzione risponde 202 Accepted immediatamente, poi
+//  continua l'elaborazione pesante in un task asincrono in background.
+//  In Deno Edge Runtime, i task avviati prima del return continuano
+//  dopo che la risposta HTTP è stata inviata al chiamante.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -815,6 +823,8 @@ function buildSystemPrompt(context: AgentContext, rawText: string): string {
 
   const instruction = DECISION_INSTRUCTIONS[decision.type] ?? DECISION_INSTRUCTIONS.manual_review;
 
+  void isPriceQuery; // declared for future conditional logic, not used in template yet
+
   return `Sei l'assistente virtuale di GestAffitti per gli appartamenti vacanza "Lungomare Senigallia" a Senigallia (AN).
 Il tuo compito è scrivere una risposta professionale e cordiale in italiano per un potenziale ospite che ha contattato il proprietario su Subito.it.
 
@@ -921,6 +931,139 @@ async function callAnthropicAPI(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  BACKGROUND PROCESSOR
+//  Eseguito dopo che la risposta HTTP 202 è già stata inviata a pg_net.
+//  Questo risolve il timeout di 5s del Database Webhook.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function processInboxRecord(opts: {
+  inboxId: string;
+  rawText: string;
+  rawMetadata: Record<string, unknown>;
+  source: string;
+  aptIdFromRecord: string | null;
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  anthropicApiKey: string | undefined;
+  llmModel: string;
+}): Promise<void> {
+  const { inboxId, rawText, rawMetadata, source, aptIdFromRecord, supabaseUrl, serviceRoleKey, anthropicApiKey, llmModel } = opts;
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  // Guard: skip se agent_decisions già esiste per questo inbox_id
+  const { data: existing } = await supabase
+    .from("agent_decisions")
+    .select("id")
+    .eq("inbox_id", inboxId)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(`[llm-reply-generator] Skipped — decision already exists for ${inboxId}`);
+    return;
+  }
+
+  // Fetch data from DB
+  const [{ data: bookingsData }, { data: apartmentsData }, { data: aptRulesData }] =
+    await Promise.all([
+      supabase.from("bookings").select("id,apt,checkin,checkout,status"),
+      supabase.from("apartments").select("id,label,name,color").eq("active", true).order("label"),
+      supabase.from("agent_apt_rules").select("*"),
+    ]);
+
+  const bookings: Booking[] = (bookingsData ?? []).map((b) => ({
+    id: b.id,
+    apt: b.apt,
+    checkin: b.checkin,
+    checkout: b.checkout,
+    status: b.status ?? "confirmed",
+  }));
+  const apartments: Apartment[] = (apartmentsData ?? []).filter((a) => a.id !== "all");
+  const aptRules: AptRule[] = aptRulesData ?? [];
+
+  // Resolve apt_id
+  const aptId = aptIdFromRecord ||
+    resolveListingFromTitle(extractListingTitle(rawMetadata), apartments) ||
+    "";
+
+  console.log(`[llm-reply-generator] apt_id resolved: ${aptId || "(unknown)"}`);
+
+  // Build AgentContext
+  const context = buildAgentContext({ aptId, source, rawText, rawMetadata, apartments, bookings, aptRules });
+  const decisionType = context.decision.type;
+
+  console.log(`[llm-reply-generator] decision_type: ${decisionType}`);
+
+  // Generate suggested text
+  let suggestedText: string;
+  let llmFailed = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  if (!anthropicApiKey) {
+    console.warn("[llm-reply-generator] ANTHROPIC_API_KEY non configurata — uso fallback template");
+    suggestedText = generateGuestReply(context);
+    llmFailed = true;
+  } else {
+    try {
+      const systemPrompt = buildSystemPrompt(context, rawText);
+      const userMessage = `Messaggio dell'ospite ricevuto su Subito.it:\n\n"${rawText}"\n\nGenera la risposta appropriata in italiano.`;
+      const result = await callAnthropicAPI(systemPrompt, userMessage, anthropicApiKey, llmModel);
+      suggestedText = result.text;
+      inputTokens = result.inputTokens;
+      outputTokens = result.outputTokens;
+      console.log(`[llm-reply-generator] LLM OK — tokens: ${inputTokens} in / ${outputTokens} out`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[llm-reply-generator] LLM error — fallback to template. Error: ${errMsg}`);
+      suggestedText = generateGuestReply(context);
+      llmFailed = true;
+    }
+  }
+
+  // INSERT in agent_decisions
+  const { data: decision, error: insertError } = await supabase
+    .from("agent_decisions")
+    .insert({
+      inbox_id: inboxId,
+      decision_type: decisionType,
+      suggested_text: suggestedText,
+      was_modified: false,
+      response_text: null,
+      decision_score: null,
+      payload: {
+        llm_model: llmFailed ? null : llmModel,
+        llm_prompt_tokens: llmFailed ? null : inputTokens,
+        llm_completion_tokens: llmFailed ? null : outputTokens,
+        llm_failed: llmFailed,
+        apt_id_resolved: aptId || null,
+        context_snapshot: {
+          decision_type: decisionType,
+          availability_status: context.availability.isAvailable,
+          pricing_total: context.pricing.totalPrice,
+          alternatives_count: context.alternatives.count,
+        },
+      },
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    // Race condition: another invocation inserted first
+    if (insertError.code === "23505") {
+      console.log(`[llm-reply-generator] Race condition — decision already inserted for ${inboxId}`);
+      return;
+    }
+    console.error("[llm-reply-generator] INSERT error:", insertError.message);
+    return;
+  }
+
+  console.log(`[llm-reply-generator] Decision saved: ${decision.id} (llm_failed=${llmFailed})`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  MAIN HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -976,128 +1119,27 @@ serve(async (req: Request) => {
     return json({ error: "Missing inbox record fields" }, 400);
   }
 
-  console.log(`[llm-reply-generator] Processing inbox_id: ${inboxId}`);
+  console.log(`[llm-reply-generator] Accepted inbox_id: ${inboxId} — processing in background`);
 
-  // ── Supabase client (service_role — bypassa RLS) ───────────────────────
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
+  // ── Avvia elaborazione in background e rispondi subito a pg_net ────────
+  // Il Supabase Database Webhook (pg_net) ha un timeout di 5s, mentre
+  // l'elaborazione completa (Anthropic API) richiede 10-25s.
+  // Rispondendo 202 subito evitiamo il timeout, l'elaborazione continua
+  // nel Deno Edge Runtime dopo che la risposta HTTP è stata inviata.
+  processInboxRecord({
+    inboxId,
+    rawText,
+    rawMetadata,
+    source,
+    aptIdFromRecord: record.apt_id ?? null,
+    supabaseUrl,
+    serviceRoleKey,
+    anthropicApiKey,
+    llmModel,
+  }).catch((err) => {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[llm-reply-generator] Background processing failed for ${inboxId}: ${errMsg}`);
   });
 
-  // ── Guard: skip se agent_decisions già esiste per questo inbox_id ──────
-  const { data: existing } = await supabase
-    .from("agent_decisions")
-    .select("id")
-    .eq("inbox_id", inboxId)
-    .maybeSingle();
-
-  if (existing) {
-    console.log(`[llm-reply-generator] Skipped — decision already exists for ${inboxId}`);
-    return json({ result: "skipped", reason: "decision_exists", decision_id: existing.id }, 200);
-  }
-
-  // ── Fetch data from DB ─────────────────────────────────────────────────
-  const [{ data: bookingsData }, { data: apartmentsData }, { data: aptRulesData }] =
-    await Promise.all([
-      supabase.from("bookings").select("id,apt,checkin,checkout,status"),
-      supabase.from("apartments").select("id,label,name,color").eq("active", true).order("label"),
-      supabase.from("agent_apt_rules").select("*"),
-    ]);
-
-  const bookings: Booking[] = (bookingsData ?? []).map((b) => ({
-    id: b.id,
-    apt: b.apt,
-    checkin: b.checkin,
-    checkout: b.checkout,
-    status: b.status ?? "confirmed",
-  }));
-  const apartments: Apartment[] = (apartmentsData ?? []).filter((a) => a.id !== "all");
-  const aptRules: AptRule[] = aptRulesData ?? [];
-
-  // ── Resolve apt_id ─────────────────────────────────────────────────────
-  const aptId = record.apt_id ||
-    resolveListingFromTitle(extractListingTitle(rawMetadata), apartments) ||
-    "";
-
-  console.log(`[llm-reply-generator] apt_id resolved: ${aptId || "(unknown)"}`);
-
-  // ── Build AgentContext ─────────────────────────────────────────────────
-  const context = buildAgentContext({ aptId, source, rawText, rawMetadata, apartments, bookings, aptRules });
-  const decisionType = context.decision.type;
-
-  console.log(`[llm-reply-generator] decision_type: ${decisionType}`);
-
-  // ── Generate suggested text ────────────────────────────────────────────
-  let suggestedText: string;
-  let llmFailed = false;
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  if (!anthropicApiKey) {
-    console.warn("[llm-reply-generator] ANTHROPIC_API_KEY non configurata — uso fallback template");
-    suggestedText = generateGuestReply(context);
-    llmFailed = true;
-  } else {
-    try {
-      const systemPrompt = buildSystemPrompt(context, rawText);
-      const userMessage = `Messaggio dell'ospite ricevuto su Subito.it:\n\n"${rawText}"\n\nGenera la risposta appropriata in italiano.`;
-      const result = await callAnthropicAPI(systemPrompt, userMessage, anthropicApiKey, llmModel);
-      suggestedText = result.text;
-      inputTokens = result.inputTokens;
-      outputTokens = result.outputTokens;
-      console.log(`[llm-reply-generator] LLM OK — tokens: ${inputTokens} in / ${outputTokens} out`);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[llm-reply-generator] LLM error — fallback to template. Error: ${errMsg}`);
-      suggestedText = generateGuestReply(context);
-      llmFailed = true;
-    }
-  }
-
-  // ── INSERT in agent_decisions ──────────────────────────────────────────
-  const { data: decision, error: insertError } = await supabase
-    .from("agent_decisions")
-    .insert({
-      inbox_id: inboxId,
-      decision_type: decisionType,
-      suggested_text: suggestedText,
-      was_modified: false,
-      response_text: null,
-      decision_score: null,
-      payload: {
-        llm_model: llmFailed ? null : llmModel,
-        llm_prompt_tokens: llmFailed ? null : inputTokens,
-        llm_completion_tokens: llmFailed ? null : outputTokens,
-        llm_failed: llmFailed,
-        apt_id_resolved: aptId || null,
-        context_snapshot: {
-          decision_type: decisionType,
-          availability_status: context.availability.isAvailable,
-          pricing_total: context.pricing.totalPrice,
-          alternatives_count: context.alternatives.count,
-        },
-      },
-    })
-    .select("id")
-    .single();
-
-  if (insertError) {
-    // Race condition: another invocation inserted first
-    if (insertError.code === "23505") {
-      console.log(`[llm-reply-generator] Race condition — decision already inserted for ${inboxId}`);
-      return json({ result: "skipped", reason: "race_condition" }, 200);
-    }
-    console.error("[llm-reply-generator] INSERT error:", insertError.message);
-    return json({ error: "Database error", detail: insertError.message }, 500);
-  }
-
-  console.log(`[llm-reply-generator] Decision saved: ${decision.id} (llm_failed=${llmFailed})`);
-
-  return json({
-    result: llmFailed ? "fallback" : "generated",
-    decision_id: decision.id,
-    inbox_id: inboxId,
-    decision_type: decisionType,
-    llm_model: llmFailed ? null : llmModel,
-    tokens: llmFailed ? null : { input: inputTokens, output: outputTokens },
-  }, 201);
+  return json({ result: "accepted", inbox_id: inboxId }, 202);
 });
