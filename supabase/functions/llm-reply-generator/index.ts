@@ -929,31 +929,158 @@ async function callAnthropicAPI(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  BACKGROUND PROCESSOR
-//  Eseguito dopo che la risposta HTTP 202 è già stata inviata a pg_net.
-//  Questo risolve il timeout di 5s del Database Webhook.
+//  BACKGROUND LLM UPGRADE
+//  Eseguito DOPO che agent_decisions è già stato creato con la risposta
+//  deterministica (fase sincrona). Tenta di aggiornare il testo con Claude.
+//  Se EdgeRuntime.waitUntil non è disponibile o il processo viene killato,
+//  la risposta deterministica rimane intatta — la pipeline non si rompe.
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function processInboxRecord(opts: {
-  inboxId: string;
+async function upgradeTolLMReply(opts: {
+  decisionId: string;
+  context: AgentContext;
   rawText: string;
-  rawMetadata: Record<string, unknown>;
-  source: string;
-  aptIdFromRecord: string | null;
+  anthropicApiKey: string;
+  llmModel: string;
   supabaseUrl: string;
   serviceRoleKey: string;
-  anthropicApiKey: string | undefined;
-  llmModel: string;
+  inboxId: string;
 }): Promise<void> {
-  const { inboxId, rawText, rawMetadata, source, aptIdFromRecord, supabaseUrl, serviceRoleKey, anthropicApiKey, llmModel } = opts;
+  const { decisionId, context, rawText, anthropicApiKey, llmModel, supabaseUrl, serviceRoleKey, inboxId } = opts;
 
-  console.log(`[llm-reply-generator] Background task started for ${inboxId}`);
+  console.log(`[llm-reply-generator] LLM upgrade started for decision ${decisionId}`);
+
+  // Client fresco — non dipende dallo scope del main handler
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  let llmText: string;
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const systemPrompt = buildSystemPrompt(context, rawText);
+    const userMessage = `Messaggio dell'ospite ricevuto su Subito.it:\n\n"${rawText}"\n\nGenera la risposta appropriata in italiano.`;
+    const result = await callAnthropicAPI(systemPrompt, userMessage, anthropicApiKey, llmModel);
+    llmText = result.text;
+    inputTokens = result.inputTokens;
+    outputTokens = result.outputTokens;
+    console.log(`[llm-reply-generator] LLM OK for ${inboxId} — tokens: ${inputTokens}/${outputTokens}`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[llm-reply-generator] LLM call failed for ${inboxId}: ${errMsg}`);
+    // Risposta deterministica già salvata — nessun aggiornamento necessario
+    return;
+  }
+
+  // UPDATE agent_decisions con testo Claude
+  const { error: updateError } = await supabase
+    .from("agent_decisions")
+    .update({
+      suggested_text: llmText,
+      payload: {
+        llm_failed: false,
+        llm_model: llmModel,
+        llm_prompt_tokens: inputTokens,
+        llm_completion_tokens: outputTokens,
+        stage: "llm_generated",
+        apt_id_resolved: context.apartment.id || null,
+        context_snapshot: {
+          decision_type: context.decision.type,
+          availability_status: context.availability.isAvailable,
+          pricing_total: context.pricing.totalPrice,
+          alternatives_count: context.alternatives.count,
+        },
+      },
+    })
+    .eq("id", decisionId);
+
+  if (updateError) {
+    console.error(`[llm-reply-generator] UPDATE error for decision ${decisionId}: ${updateError.message}`);
+    return;
+  }
+
+  console.log(`[llm-reply-generator] LLM upgrade completed for decision ${decisionId}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MAIN HANDLER
+//
+//  Flusso in due fasi:
+//  1. SINCRONA (prima del return 202):
+//     auth → parse → fetch DB → buildContext → INSERT deterministico
+//     Garantisce che agent_decisions esista SEMPRE, indipendentemente da
+//     EdgeRuntime.waitUntil e dal piano Supabase.
+//  2. BACKGROUND (dopo il return 202, opzionale):
+//     chiama Anthropic → UPDATE suggested_text se risponde
+//     Se il processo viene killato, la risposta deterministica rimane.
+// ═══════════════════════════════════════════════════════════════════════════
+
+Deno.serve(async (req: Request) => {
+  // Health check
+  if (req.method === "GET") return json({ status: "ok", function: "llm-reply-generator" });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  // ── Auth ────────────────────────────────────────────────────────────────
+  const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.error("[llm-reply-generator] WEBHOOK_SECRET non configurato");
+    return json({ error: "Server misconfiguration" }, 500);
+  }
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (token !== webhookSecret) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  // ── Env vars ────────────────────────────────────────────────────────────
+  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const llmModel = Deno.env.get("LLM_MODEL") ?? "claude-sonnet-4-6";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("[llm-reply-generator] Supabase env vars mancanti");
+    return json({ error: "Server misconfiguration" }, 500);
+  }
+
+  // ── Parse webhook payload ────────────────────────────────────────────────
+  let payload: DatabaseWebhookPayload;
+  try {
+    const raw = await req.text();
+    payload = JSON.parse(raw);
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  if (payload.type !== "INSERT" || !payload.record) {
+    return json({ result: "skipped", reason: "not_an_insert" }, 200);
+  }
+
+  const record = payload.record;
+  const inboxId = record.id;
+  const rawText = record.raw_text ?? "";
+  const rawMetadata = record.raw_metadata ?? {};
+  const source = record.source ?? "subito";
+
+  if (!inboxId || !rawText) {
+    return json({ error: "Missing inbox record fields" }, 400);
+  }
+
+  console.log(`[llm-reply-generator] Accepted inbox_id: ${inboxId}`);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  // Guard: skip se agent_decisions già esiste per questo inbox_id
+  // ════════════════════════════════════════════════════════════════════════
+  //  FASE SINCRONA — tutto avviene PRIMA del return 202.
+  //  Stima tempi: 3 query DB parallele (~0.5-1s) + compute (~1ms) +
+  //  INSERT (~0.2s) = ~1-1.5s totali, dentro il timeout pg_net di 5s.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // 1. Idempotency guard
   const { data: existing } = await supabase
     .from("agent_decisions")
     .select("id")
@@ -961,11 +1088,11 @@ async function processInboxRecord(opts: {
     .maybeSingle();
 
   if (existing) {
-    console.log(`[llm-reply-generator] Skipped — decision already exists for ${inboxId}`);
-    return;
+    console.log(`[llm-reply-generator] Skipped INSERT — decision already exists: ${existing.id}`);
+    return json({ result: "accepted", inbox_id: inboxId }, 202);
   }
 
-  // Fetch data from DB
+  // 2. Fetch dati dal DB (in parallelo)
   const [{ data: bookingsData }, { data: apartmentsData }, { data: aptRulesData }] =
     await Promise.all([
       supabase.from("bookings").select("id,apt,checkin,checkout,status"),
@@ -983,61 +1110,36 @@ async function processInboxRecord(opts: {
   const apartments: Apartment[] = (apartmentsData ?? []).filter((a) => a.id !== "all");
   const aptRules: AptRule[] = aptRulesData ?? [];
 
-  // Resolve apt_id
-  const aptId = aptIdFromRecord ||
+  // 3. Resolve apt_id
+  const aptId = record.apt_id ||
     resolveListingFromTitle(extractListingTitle(rawMetadata), apartments) ||
     "";
 
   console.log(`[llm-reply-generator] apt_id resolved: ${aptId || "(unknown)"}`);
 
-  // Build AgentContext
+  // 4. Build context + risposta deterministica
   const context = buildAgentContext({ aptId, source, rawText, rawMetadata, apartments, bookings, aptRules });
   const decisionType = context.decision.type;
+  const deterministicText = generateGuestReply(context);
 
-  console.log(`[llm-reply-generator] decision_type: ${decisionType}`);
+  console.log(`[llm-reply-generator] decision_type: ${decisionType} — inserting deterministic reply`);
 
-  // Generate suggested text
-  let suggestedText: string;
-  let llmFailed = false;
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  if (!anthropicApiKey) {
-    console.warn("[llm-reply-generator] ANTHROPIC_API_KEY non configurata — uso fallback template");
-    suggestedText = generateGuestReply(context);
-    llmFailed = true;
-  } else {
-    try {
-      const systemPrompt = buildSystemPrompt(context, rawText);
-      const userMessage = `Messaggio dell'ospite ricevuto su Subito.it:\n\n"${rawText}"\n\nGenera la risposta appropriata in italiano.`;
-      const result = await callAnthropicAPI(systemPrompt, userMessage, anthropicApiKey, llmModel);
-      suggestedText = result.text;
-      inputTokens = result.inputTokens;
-      outputTokens = result.outputTokens;
-      console.log(`[llm-reply-generator] LLM OK — tokens: ${inputTokens} in / ${outputTokens} out`);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[llm-reply-generator] LLM error — fallback to template. Error: ${errMsg}`);
-      suggestedText = generateGuestReply(context);
-      llmFailed = true;
-    }
-  }
-
-  // INSERT in agent_decisions
-  const { data: decision, error: insertError } = await supabase
+  // 5. INSERT agent_decisions con risposta deterministica
+  const { data: insertedDecision, error: insertError } = await supabase
     .from("agent_decisions")
     .insert({
       inbox_id: inboxId,
       decision_type: decisionType,
-      suggested_text: suggestedText,
+      suggested_text: deterministicText,
       was_modified: false,
       response_text: null,
       decision_score: null,
       payload: {
-        llm_model: llmFailed ? null : llmModel,
-        llm_prompt_tokens: llmFailed ? null : inputTokens,
-        llm_completion_tokens: llmFailed ? null : outputTokens,
-        llm_failed: llmFailed,
+        llm_failed: true,
+        llm_model: null,
+        llm_prompt_tokens: null,
+        llm_completion_tokens: null,
+        stage: "deterministic_created",
         apt_id_resolved: aptId || null,
         context_snapshot: {
           decision_type: decisionType,
@@ -1051,105 +1153,48 @@ async function processInboxRecord(opts: {
     .single();
 
   if (insertError) {
-    // Race condition: another invocation inserted first
     if (insertError.code === "23505") {
+      // Race condition: altra invocazione ha già inserito
       console.log(`[llm-reply-generator] Race condition — decision already inserted for ${inboxId}`);
-      return;
+      return json({ result: "accepted", inbox_id: inboxId }, 202);
     }
-    console.error("[llm-reply-generator] INSERT error:", insertError.message);
-    return;
+    console.error(`[llm-reply-generator] INSERT error for ${inboxId}: ${insertError.message}`);
+    return json({ result: "accepted", inbox_id: inboxId, warning: "decision_insert_failed" }, 202);
   }
 
-  console.log(`[llm-reply-generator] Decision saved: ${decision.id} (llm_failed=${llmFailed})`);
-  console.log(`[llm-reply-generator] Background task completed for ${inboxId}`);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  MAIN HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
-
-Deno.serve(async (req: Request) => {
-  // Health check
-  if (req.method === "GET") return json({ status: "ok", function: "llm-reply-generator" });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
-  // ── Auth: stesso pattern di agent-webhook ──────────────────────────────
-  const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
-  if (!webhookSecret) {
-    console.error("[llm-reply-generator] WEBHOOK_SECRET non configurato");
-    return json({ error: "Server misconfiguration" }, 500);
+  const decisionId: string | undefined = insertedDecision?.id;
+  if (!decisionId) {
+    console.error(`[llm-reply-generator] INSERT returned no id for ${inboxId}`);
+    return json({ result: "accepted", inbox_id: inboxId }, 202);
   }
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (token !== webhookSecret) {
-    return json({ error: "Unauthorized" }, 401);
+  console.log(`[llm-reply-generator] Deterministic decision saved: ${decisionId}`);
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  FASE BACKGROUND — tenta upgrade LLM dopo il return 202.
+  //  Se EdgeRuntime.waitUntil funziona, il testo Claude aggiorna il record.
+  //  Se il processo viene killato, la risposta deterministica è già salvata.
+  // ════════════════════════════════════════════════════════════════════════
+
+  if (anthropicApiKey) {
+    const bgPromise = upgradeTolLMReply({
+      decisionId,
+      context,
+      rawText,
+      anthropicApiKey,
+      llmModel,
+      supabaseUrl,
+      serviceRoleKey,
+      inboxId,
+    }).catch((err) => {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[llm-reply-generator] LLM upgrade failed for ${inboxId}: ${errMsg}`);
+    });
+
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).EdgeRuntime?.waitUntil?.(bgPromise);
+  } else {
+    console.warn("[llm-reply-generator] ANTHROPIC_API_KEY non configurata — LLM upgrade saltato");
   }
-
-  // ── Env vars ───────────────────────────────────────────────────────────
-  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const llmModel = Deno.env.get("LLM_MODEL") ?? "claude-sonnet-4-6";
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("[llm-reply-generator] Supabase env vars mancanti");
-    return json({ error: "Server misconfiguration" }, 500);
-  }
-
-  // ── Parse webhook payload ──────────────────────────────────────────────
-  let payload: DatabaseWebhookPayload;
-  try {
-    const raw = await req.text();
-    payload = JSON.parse(raw);
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
-  }
-
-  // Accept only INSERT events on agent_inbox
-  if (payload.type !== "INSERT" || !payload.record) {
-    return json({ result: "skipped", reason: "not_an_insert" }, 200);
-  }
-
-  const record = payload.record;
-  const inboxId = record.id;
-  const rawText = record.raw_text ?? "";
-  const rawMetadata = record.raw_metadata ?? {};
-  const source = record.source ?? "subito";
-
-  if (!inboxId || !rawText) {
-    return json({ error: "Missing inbox record fields" }, 400);
-  }
-
-  console.log(`[llm-reply-generator] Accepted inbox_id: ${inboxId} — processing in background`);
-
-  // ── Avvia elaborazione in background e rispondi subito a pg_net ────────
-  // Il Supabase Database Webhook (pg_net) ha un timeout di 5s, mentre
-  // l'elaborazione completa (Anthropic API) richiede 10-25s.
-  // Rispondendo 202 subito evitiamo il timeout.
-  //
-  // CRITICO: si usa EdgeRuntime.waitUntil() per garantire che il task
-  // background completi DOPO che la risposta HTTP è stata inviata.
-  // Senza waitUntil, il Deno Edge Runtime può terminare il processo
-  // non appena la Response viene consumata, killando il background task.
-  // Con waitUntil, il runtime mantiene il processo vivo fino al resolve.
-  // Il fallback .catch() gestisce gli errori senza propagarli al caller.
-  const bgPromise = processInboxRecord({
-    inboxId,
-    rawText,
-    rawMetadata,
-    source,
-    aptIdFromRecord: record.apt_id ?? null,
-    supabaseUrl,
-    serviceRoleKey,
-    anthropicApiKey,
-    llmModel,
-  }).catch((err) => {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[llm-reply-generator] Background processing failed for ${inboxId}: ${errMsg}`);
-  });
-
-  // deno-lint-ignore no-explicit-any
-  (globalThis as any).EdgeRuntime?.waitUntil?.(bgPromise);
 
   return json({ result: "accepted", inbox_id: inboxId }, 202);
 });
