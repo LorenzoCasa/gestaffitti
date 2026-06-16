@@ -945,8 +945,10 @@ async function upgradeTolLMReply(opts: {
   supabaseUrl: string;
   serviceRoleKey: string;
   inboxId: string;
+  rawDecisionType: string;
+  normalizedDecisionType: string;
 }): Promise<void> {
-  const { decisionId, context, rawText, anthropicApiKey, llmModel, supabaseUrl, serviceRoleKey, inboxId } = opts;
+  const { decisionId, context, rawText, anthropicApiKey, llmModel, supabaseUrl, serviceRoleKey, inboxId, rawDecisionType, normalizedDecisionType } = opts;
 
   console.log(`[llm-reply-generator] LLM upgrade started for decision ${decisionId}`);
 
@@ -985,9 +987,11 @@ async function upgradeTolLMReply(opts: {
         llm_prompt_tokens: inputTokens,
         llm_completion_tokens: outputTokens,
         stage: "llm_generated",
+        raw_decision_type: rawDecisionType,
+        normalized_decision_type: normalizedDecisionType,
         apt_id_resolved: context.apartment.id || null,
         context_snapshot: {
-          decision_type: context.decision.type,
+          decision_type: rawDecisionType,
           availability_status: context.availability.isAvailable,
           pricing_total: context.pricing.totalPrice,
           alternatives_count: context.alternatives.count,
@@ -1198,6 +1202,8 @@ Deno.serve(async (req: Request) => {
       supabaseUrl,
       serviceRoleKey,
       inboxId,
+      rawDecisionType,
+      normalizedDecisionType,
     }).catch((err) => {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error(`[llm-reply-generator] LLM upgrade failed for ${inboxId}: ${errMsg}`);
