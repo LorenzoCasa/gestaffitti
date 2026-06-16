@@ -30,7 +30,6 @@
 //  dopo che la risposta HTTP è stata inviata al chiamante.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,7 +57,6 @@ interface AgentInboxRecord {
 interface Apartment {
   id: string;
   label: string;
-  name?: string;
   color?: string;
 }
 
@@ -617,7 +615,7 @@ function buildAgentContext(opts: {
   };
 
   const apt = apartments.find((a) => a.id === aptId);
-  const apartment = { id: apt?.id ?? aptId, label: apt?.label ?? apt?.name ?? aptId };
+  const apartment = { id: apt?.id ?? aptId, label: apt?.label ?? aptId };
 
   const rules = resolveAptRules(aptId, source, aptRules);
   let availability = { available: false, isAvailable: false, reason: "dates_missing", conflictingBooking: null, nights: null as number | null };
@@ -949,6 +947,8 @@ async function processInboxRecord(opts: {
 }): Promise<void> {
   const { inboxId, rawText, rawMetadata, source, aptIdFromRecord, supabaseUrl, serviceRoleKey, anthropicApiKey, llmModel } = opts;
 
+  console.log(`[llm-reply-generator] Background task started for ${inboxId}`);
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
@@ -969,7 +969,7 @@ async function processInboxRecord(opts: {
   const [{ data: bookingsData }, { data: apartmentsData }, { data: aptRulesData }] =
     await Promise.all([
       supabase.from("bookings").select("id,apt,checkin,checkout,status"),
-      supabase.from("apartments").select("id,label,name,color").eq("active", true).order("label"),
+      supabase.from("apartments").select("id,label,color").eq("active", true).order("label"),
       supabase.from("agent_apt_rules").select("*"),
     ]);
 
@@ -1061,13 +1061,14 @@ async function processInboxRecord(opts: {
   }
 
   console.log(`[llm-reply-generator] Decision saved: ${decision.id} (llm_failed=${llmFailed})`);
+  console.log(`[llm-reply-generator] Background task completed for ${inboxId}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  MAIN HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Health check
   if (req.method === "GET") return json({ status: "ok", function: "llm-reply-generator" });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
