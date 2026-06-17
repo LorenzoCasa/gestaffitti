@@ -160,7 +160,7 @@ export function findAlternatives({
   bookings     = [],
   maxTotal     = 3,
 }) {
-  if (!requestedCheckin || !requestedCheckout || isFullMonth) return [];
+  if (!aptId || !requestedCheckin || !requestedCheckout || isFullMonth) return [];
 
   const results   = [];
   const reqNights = nts(requestedCheckin, requestedCheckout);
@@ -171,10 +171,11 @@ export function findAlternatives({
 
   const isNonStandardDuration = reqNights % 7 !== 0;
 
-  // 1. Other apts, same period — only for standard durations.
-  // For non-standard durations, proposing another apt on the same non-standard dates is wrong:
-  // the client asked for a specific apt and that stay is not sat-sat regardless of which apt.
-  if (!isNonStandardDuration) {
+  // 1. Other apts, same period — only for standard durations AND sat-sat aligned in peak months.
+  // For non-standard durations, or peak months with non-Saturday checkin, proposing the same
+  // dates on another apt is wrong: the stay would violate stay rules on both apartments.
+  const checkinIsSat = weekdayUTC(requestedCheckin) === 6;
+  if (!isNonStandardDuration && (!isPeak || checkinIsSat)) {
     for (const apt of otherApts) {
       if (results.length >= maxTotal) break;
       const avail = checkAvailability(

@@ -490,7 +490,7 @@ function findAlternatives(opts: {
   isFullMonth?: boolean; apartments?: Apartment[]; bookings?: Booking[]; maxTotal?: number;
 }) {
   const { aptId, requestedCheckin, requestedCheckout, isFullMonth = false, apartments = [], bookings = [], maxTotal = 3 } = opts;
-  if (!requestedCheckin || !requestedCheckout || isFullMonth) return [];
+  if (!aptId || !requestedCheckin || !requestedCheckout || isFullMonth) return [];
   const results: ReturnType<typeof makeAlt>[] = [];
   const reqNights = nightsBetweenDates(requestedCheckin, requestedCheckout);
   const isPeak = PEAK_MONTHS_SET.has(monthOfDate(requestedCheckin));
@@ -498,8 +498,10 @@ function findAlternatives(opts: {
   const otherApts = apartments.filter((a) => a.id !== aptId && a.id !== "all");
   const isNonStandard = reqNights % 7 !== 0;
 
-  // Other apts, same period (standard durations only)
-  if (!isNonStandard) {
+  // Other apts, same period — only for standard durations AND sat-sat aligned in peak months.
+  // Proposing the same non-sat-sat dates on another apt violates stay rules on both apts.
+  const checkinIsSat = weekdayUTC(requestedCheckin) === 6;
+  if (!isNonStandard && (!isPeak || checkinIsSat)) {
     for (const apt of otherApts) {
       if (results.length >= maxTotal) break;
       const avail = checkAvailability({ aptId: apt.id, checkin: requestedCheckin, checkout: requestedCheckout }, bookings, { minNights: 1 });
@@ -655,7 +657,8 @@ function buildAgentContext(opts: {
   const altList = findAlternatives({ aptId, requestedCheckin: checkin, requestedCheckout: checkout, isFullMonth, apartments, bookings });
   const alternatives = { items: altList, count: altList.length };
 
-  const decision = { type: decideType({ inquiry: parsed, availability, stayRules, pricing, alternatives, fullMonthAvailability }) };
+  // aptId not resolved → cannot produce a valid reply; bypass decideType entirely
+  const decision = { type: !aptId ? "manual_review" : decideType({ inquiry: parsed, availability, stayRules, pricing, alternatives, fullMonthAvailability }) };
 
   const warnings = [
     ...(parsed.warnings ?? []),
