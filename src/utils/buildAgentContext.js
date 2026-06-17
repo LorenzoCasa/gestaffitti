@@ -21,6 +21,8 @@ function resolveAptRules(aptId, source, aptRules) {
 }
 
 function decideType({ inquiry, availability, stayRules, pricing, alternatives, fullMonthAvailability }) {
+  // Apartment not recognized — cannot produce a valid reply
+  if (!inquiry.aptId) return 'manual_review';
   // Full-month request: price + calendar check required
   if (inquiry.isFullMonth) {
     if (pricing.totalPrice == null) return 'needs_info';

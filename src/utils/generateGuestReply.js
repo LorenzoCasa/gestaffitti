@@ -98,18 +98,13 @@ Cordiali saluti`;
   },
 
   outside_rules({ inquiry, stayRules, alternatives }) {
-    // Calendar-verified alternatives take priority over mathematical sat-sat suggestions.
-    // suggestedValidRanges is a pure date calculation — NOT checked against bookings.
+    // Only show calendar-verified alternatives — suggestedValidRanges is a pure date calculation,
+    // not checked against the calendar, so it can propose already-booked dates.
     let altLines = [];
     if (alternatives?.items?.length > 0) {
       altLines = alternatives.items.slice(0, 3).map(a => {
         const price = a.pricing?.totalPrice != null ? `, €${a.pricing.totalPrice}` : '';
         return `  📅 ${itDate(a.checkin)} – ${itDate(a.checkout)} (${a.nights} notti${price})`;
-      });
-    } else {
-      altLines = (stayRules.suggestedValidRanges ?? []).slice(0, 2).map(r => {
-        const price = r.pricing?.totalPrice != null ? `, €${r.pricing.totalPrice}` : '';
-        return `  • ${itDate(r.checkin)} – ${itDate(r.checkout)} (${r.nights} notti${price})`;
       });
     }
     const altBlock = altLines.length > 0
