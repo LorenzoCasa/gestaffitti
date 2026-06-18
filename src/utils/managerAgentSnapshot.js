@@ -14,7 +14,6 @@ import { groupInboxByThread } from './groupInboxByThread.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ACTIVE_INBOX_STATUSES  = new Set(['new', 'processing']);
 const ACTIVE_BOOKING_STATUSES = new Set(['confirmed', 'pending_payment']);
 
 // Decisions that need human review
@@ -232,10 +231,12 @@ export function getManagerAgentSnapshot({
   const threeDaysOut = addDays(today, 3);
   for (const b of activeBookings) {
     if (b.checkin >= today && b.checkin <= threeDaysOut && !depositPaid(b)) {
+      const daysUntilArr = nightsBetween(today, b.checkin);
+      const whenLabel    = daysUntilArr === 0 ? 'OGGI' : `tra ${daysUntilArr} giorno/i`;
       calendar_alerts.push({
         type:      'deposit_pending',
         severity:  'medium',
-        message:   `Caparra non ricevuta — ${b.guest} (${b.apt}) arriva tra ${nightsBetween(today, b.checkin)} giorni`,
+        message:   `Caparra non ricevuta — ${b.guest} (${b.apt}) arriva ${whenLabel}`,
         bookingId: b.id,
         apt:       b.apt,
         guest:     b.guest,

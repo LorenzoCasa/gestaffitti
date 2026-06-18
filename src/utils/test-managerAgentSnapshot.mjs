@@ -365,6 +365,15 @@ run('T22 — Messaggio outside_rules → pending_opportunities', () => {
   check('0 messages_to_review',       snap.messages_to_review.length, 0);
 });
 
+run('T23 — Caparra mancante con checkin OGGI → alert dice "OGGI" non "tra 0 giorni"', () => {
+  const bookings = [mkBooking({ checkin: TODAY, checkout: daysFrom(7), deposit_paid: false, checkin_done: false })];
+  const snap     = getManagerAgentSnapshot({ bookings, today: TODAY });
+  const depAlert = snap.calendar_alerts.find(a => a.type === 'deposit_pending');
+  checkTrue('deposit_pending alert presente',         depAlert);
+  checkTrue('messaggio dice OGGI',                    depAlert.message.includes('OGGI'));
+  checkFalse('messaggio NON dice "tra 0 giorni"',     depAlert.message.includes('tra 0 giorni'));
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(60)}`);
