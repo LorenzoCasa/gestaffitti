@@ -87,6 +87,30 @@ interface SnapshotInfo {
   calendar_alerts: Array<{ severity: string; message: string }>;
 }
 
+interface PriceBenchmarks {
+  disclaimer: string;
+  weekly: Record<string, string>;
+  monthly?: Record<string, string>;
+  positioning_note?: string;
+}
+
+interface MarketContext {
+  area: string;
+  property_type: string;
+  business_model: string;
+  primary_target: string;
+  internal_truth_rule: string;
+  no_live_data_disclaimer: string;
+  seasonality_summary: {
+    peak: string;
+    june: string;
+    september: string;
+  };
+  price_benchmarks: PriceBenchmarks;
+  revenue_highlights: string[];
+  channel_summary: string;
+}
+
 interface AgentContext {
   today: string;
   apartments: ApartmentInfo[];
@@ -95,6 +119,7 @@ interface AgentContext {
   snapshot: SnapshotInfo | null;
   selectedThreadId?: string | null;
   selectedBookingId?: string | null;
+  market_context?: MarketContext | null;
 }
 
 interface RequestBody {
@@ -116,34 +141,65 @@ interface BrainResponse {
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT_INSTRUCTIONS = `Sei il Manager Agent di GestAffitti.
-Aiuti il proprietario a gestire affitti brevi in modo operativo, pratico e veloce.
+const SYSTEM_PROMPT_INSTRUCTIONS = `Sei il Manager Agent di GestAffitti — piattaforma di gestione affitti brevi per appartamenti estivi a Senigallia (Marche, costa adriatica).
 
-Puoi aiutare su:
-- richieste da clienti (messaggi Subito, opportunità aperte)
-- prenotazioni attive, future, in attesa di pagamento
-- calendario, disponibilità, arrivi, partenze
-- caparre ricevute o in attesa
-- check-in e check-out
-- priorità operative di oggi
-- fatturato e dati economici
-- stato degli appartamenti
+HAI DUE RUOLI DISTINTI:
 
-REGOLE FONDAMENTALI:
-1. Parla SEMPRE in italiano naturale, conciso, pratico. Nessun preambolo.
-2. Usa SOLO i dati presenti nel CONTESTO OPERATIVO ricevuto. Non inventare.
-3. Se un dato non è nel contesto, dillo chiaramente e chiedi chiarimento.
-4. Non inventare disponibilità, prezzi, date, clienti o appartamenti.
-5. Non eseguire mai azioni direttamente: restituisci solo un action_plan strutturato.
-6. Il proprietario deve sempre confermare prima che vengano eseguite azioni sul DB.
-7. Se ci sono più possibilità (es. due ospiti con stesso cognome), proponi opzioni numerate.
-8. Quando il proprietario usa un riferimento ambiguo ("quello", "lui"), guarda lo storico.
+1. ASSISTENTE OPERATIVO: gestisci prenotazioni, caparre, check-in/out, messaggi, calendario, priorità quotidiane.
 
-FORMATO RISPOSTA (obbligatorio):
-Rispondi SEMPRE e SOLO con JSON valido in questo formato esatto, senza markdown:
+2. CONSULENTE DI MERCATO: sei un esperto di affitti brevi, revenue management e mercato balneare adriatico. Puoi analizzare, confrontare, suggerire strategie e consigliare sul posizionamento.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGOLA MADRE — DISTINZIONE OBBLIGATORIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 DATI GESTIONALE (fonte di verità assoluta):
+  → Vengono SOLO dal CONTESTO OPERATIVO fornito.
+  → Includono: disponibilità, prezzi ufficiali, prenotazioni, caparre, check-in/out, clienti, calendario, regole interne.
+  → Se non è nel contesto: di' "Non ho questo dato nel gestionale."
+  → NON inventare MAI questi dati.
+
+📈 ANALISI DI MERCATO (consulenza):
+  → Usa la tua conoscenza + il CONTESTO MERCATO fornito.
+  → Include: benchmark prezzi, stagionalità, strategie, canali, concorrenza, revenue management.
+  → NON inventare dati live della concorrenza. Se mancano dati live: di' esplicitamente "Non ho dati live da Booking/Airbnb/concorrenza."
+
+💡 CONSIGLIO OPERATIVO:
+  → Raccomandazione pratica basata su dati reali + analisi di mercato.
+  → Sempre distinguibile da dati certi e da consigli.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGOLE CRITICHE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Non inventare disponibilità, prezzi ufficiali, prenotazioni, caparre, clienti o date del gestionale.
+2. Se un dato interno non è nel contesto: di' "Non ho questo dato nel gestionale."
+3. Non inventare prezzi reali della concorrenza. Usa solo benchmark generali dichiarati come tali.
+4. Non modificare mai prezzi o calendario. Puoi solo consigliare.
+5. Non generare action_plan per domande strategiche/di mercato — solo per azioni operative concrete.
+6. Per domande miste: prima i dati certi dal gestionale, poi l'analisi, poi il consiglio.
+7. Parla sempre in italiano naturale, conciso, pratico. Nessun preambolo.
+8. Per ambiguità (es. due ospiti con stesso cognome): proponi opzioni numerate.
+9. Per riferimenti vaghi ("quello", "lui"): guarda lo storico della conversazione.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRUTTURA RISPOSTA (usa quando mescoli gestionale + mercato)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"📊 Dal gestionale: [dati certi]
+📈 Analisi mercato: [benchmark/stima]
+💡 Consiglio: [raccomandazione]"
+
+Per risposte puramente operative o puramente strategiche, usa testo naturale senza struttura a blocchi.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMATO JSON RISPOSTA (obbligatorio)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Rispondi SEMPRE e SOLO con JSON valido in questo formato, senza markdown:
 {
   "reply": "risposta naturale in italiano",
-  "intent": "show_today_tasks|show_pending_requests|show_calendar_status|mark_deposit_paid|mark_checkin_done|cancel_booking|create_booking|confirm_request|move_booking|clarification_needed|no_action",
+  "intent": "show_today_tasks|show_pending_requests|show_calendar_status|market_analysis|revenue_advice|show_competitor_info|mark_deposit_paid|mark_checkin_done|cancel_booking|create_booking|confirm_request|move_booking|clarification_needed|no_action",
   "confidence": 0.9,
   "needs_clarification": false,
   "clarification_question": null,
@@ -152,11 +208,14 @@ Rispondi SEMPRE e SOLO con JSON valido in questo formato esatto, senza markdown:
   "options": []
 }
 
-QUANDO needs_confirmation è true, action_plan deve contenere:
-- mark_deposit_paid: { "type": "mark_deposit_paid", "payload": { "bookingId": "<id esatto dal contesto>", "guest": "Nome Cognome" } }
-- mark_checkin_done: { "type": "mark_checkin_done", "payload": { "bookingId": "<id esatto>", "guest": "Nome Cognome" } }
-- cancel_booking:    { "type": "cancel_booking",    "payload": { "bookingId": "<id esatto>", "guest": "Nome Cognome" } }
-- create_booking:    { "type": "create_booking",    "payload": { "aptId": "apt1|apt2", "guest": "Nome Cognome", "checkin": "YYYY-MM-DD", "checkout": "YYYY-MM-DD", "price": 800, "deposit": 200 } }
+INTENT DI MERCATO (market_analysis, revenue_advice, show_competitor_info):
+  → needs_confirmation: false, action_plan: null SEMPRE. Non richiedono azioni operative.
+
+INTENT OPERATIVI (needs_confirmation: true solo con bookingId certo dal contesto):
+  → mark_deposit_paid: { "type": "mark_deposit_paid", "payload": { "bookingId": "<id esatto>", "guest": "Nome Cognome" } }
+  → mark_checkin_done: { "type": "mark_checkin_done", "payload": { "bookingId": "<id esatto>", "guest": "Nome Cognome" } }
+  → cancel_booking:    { "type": "cancel_booking",    "payload": { "bookingId": "<id esatto>", "guest": "Nome Cognome" } }
+  → create_booking:    { "type": "create_booking",    "payload": { "aptId": "apt1|apt2", "guest": "Nome Cognome", "checkin": "YYYY-MM-DD", "checkout": "YYYY-MM-DD", "price": 800, "deposit": 200 } }
 
 QUANDO manca info per action_plan: needs_clarification: true, chiedi SOLO ciò che manca.
 NON mettere needs_confirmation: true se non hai un bookingId certo dal contesto.
@@ -167,11 +226,13 @@ INTENTI INFORMATIVI (show_*): needs_confirmation: false, action_plan: null sempr
 function buildContextBlock(ctx: AgentContext): string {
   const lines: string[] = [`DATA OGGI: ${ctx.today}`];
 
+  // Apartments
   lines.push("\nAPPARTAMENTI:");
   for (const apt of ctx.apartments) {
     lines.push(`  ${apt.id}: ${apt.label}`);
   }
 
+  // Active bookings
   if (ctx.bookings.length > 0) {
     lines.push("\nPRENOTAZIONI ATTIVE:");
     for (const b of ctx.bookings) {
@@ -184,6 +245,7 @@ function buildContextBlock(ctx: AgentContext): string {
     lines.push("\nPRENOTAZIONI ATTIVE: nessuna");
   }
 
+  // Current guests
   if (ctx.snapshot?.current_guests?.length) {
     lines.push("\nOSPITI PRESENTI:");
     for (const g of ctx.snapshot.current_guests) {
@@ -191,6 +253,7 @@ function buildContextBlock(ctx: AgentContext): string {
     }
   }
 
+  // Upcoming arrivals (next 7 days)
   if (ctx.snapshot?.upcoming_arrivals?.length) {
     lines.push("\nARRIVI IMMINENTI (7gg):");
     for (const a of ctx.snapshot.upcoming_arrivals) {
@@ -199,6 +262,7 @@ function buildContextBlock(ctx: AgentContext): string {
     }
   }
 
+  // Calendar alerts
   if (ctx.snapshot?.calendar_alerts?.length) {
     lines.push("\nALERT CALENDARIO:");
     for (const a of ctx.snapshot.calendar_alerts) {
@@ -206,6 +270,7 @@ function buildContextBlock(ctx: AgentContext): string {
     }
   }
 
+  // Inbox / requests
   if (ctx.inbox.length > 0) {
     lines.push("\nMESSAGGI E RICHIESTE:");
     for (const item of ctx.inbox) {
@@ -222,14 +287,46 @@ function buildContextBlock(ctx: AgentContext): string {
     lines.push("\nMESSAGGI E RICHIESTE: nessuno");
   }
 
+  // Operational summary
   if (ctx.snapshot?.summary) {
     lines.push(`\nRIEPILOGO OPERATIVO:\n${ctx.snapshot.summary}`);
   }
 
+  // Suggested actions
   if (ctx.snapshot?.suggested_actions?.length) {
     lines.push("\nAZIONI PRIORITARIE:");
     for (const a of ctx.snapshot.suggested_actions.slice(0, 6)) {
       lines.push(`  [P${a.priority}] ${a.action}`);
+    }
+  }
+
+  // Market context (for strategic advice only — does NOT override gestionale data)
+  if (ctx.market_context) {
+    const mc = ctx.market_context;
+    lines.push("\n---");
+    lines.push("CONTESTO MERCATO (solo per consigli strategici — NON modifica dati gestionale):");
+    lines.push(`  Area: ${mc.area}`);
+    lines.push(`  Tipo: ${mc.property_type} | Modello: ${mc.business_model}`);
+    lines.push(`  Target: ${mc.primary_target}`);
+    lines.push(`  ⚠️  ${mc.no_live_data_disclaimer}`);
+    if (mc.seasonality_summary) {
+      lines.push("  Stagionalità:");
+      lines.push(`    • Alta: ${mc.seasonality_summary.peak}`);
+      lines.push(`    • Giugno: ${mc.seasonality_summary.june}`);
+      lines.push(`    • Settembre: ${mc.seasonality_summary.september}`);
+    }
+    if (mc.price_benchmarks?.weekly) {
+      lines.push(`  Benchmark prezzi mercato (${mc.price_benchmarks.disclaimer}):`);
+      for (const [k, v] of Object.entries(mc.price_benchmarks.weekly)) {
+        lines.push(`    ${k}: ${v}`);
+      }
+    }
+    if (mc.revenue_highlights?.length) {
+      lines.push("  Revenue tips:");
+      mc.revenue_highlights.forEach((tip) => lines.push(`    • ${tip}`));
+    }
+    if (mc.channel_summary) {
+      lines.push(`  Canali: ${mc.channel_summary}`);
     }
   }
 
@@ -263,7 +360,7 @@ async function callAnthropic(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 800,
+        max_tokens: 1000,
         system: systemPrompt,
         messages,
       }),
@@ -297,16 +394,18 @@ async function callAnthropic(
 
 function parseBrainResponse(raw: string): BrainResponse {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+
   const parsed = JSON.parse(cleaned) as Partial<BrainResponse>;
+
   return {
-    reply:                 typeof parsed.reply === "string" ? parsed.reply : "Risposta non disponibile.",
-    intent:                typeof parsed.intent === "string" ? parsed.intent : "no_action",
-    confidence:            typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
-    needs_clarification:   typeof parsed.needs_clarification === "boolean" ? parsed.needs_clarification : false,
+    reply:                  typeof parsed.reply === "string" ? parsed.reply : "Risposta non disponibile.",
+    intent:                 typeof parsed.intent === "string" ? parsed.intent : "no_action",
+    confidence:             typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+    needs_clarification:    typeof parsed.needs_clarification === "boolean" ? parsed.needs_clarification : false,
     clarification_question: parsed.clarification_question ?? null,
-    needs_confirmation:    typeof parsed.needs_confirmation === "boolean" ? parsed.needs_confirmation : false,
-    action_plan:           parsed.action_plan ?? null,
-    options:               Array.isArray(parsed.options) ? parsed.options : [],
+    needs_confirmation:     typeof parsed.needs_confirmation === "boolean" ? parsed.needs_confirmation : false,
+    action_plan:            parsed.action_plan ?? null,
+    options:                Array.isArray(parsed.options) ? parsed.options : [],
   };
 }
 
@@ -322,7 +421,7 @@ function fallbackResponse(reason: string): BrainResponse {
     needs_confirmation: false,
     action_plan: null,
     options: [],
-    // @ts-ignore
+    // @ts-ignore extra field for debugging
     _fallback: true,
     _fallback_reason: reason,
   };
@@ -334,6 +433,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
+
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
   }
@@ -362,7 +462,7 @@ Deno.serve(async (req: Request) => {
   const model = Deno.env.get("LLM_MODEL") ?? "claude-sonnet-4-6";
 
   const contextBlock = buildContextBlock(context);
-  const systemPrompt = `${SYSTEM_PROMPT_INSTRUCTIONS}\n\n---\nCONTESTO OPERATIVO:\n${contextBlock}`;
+  const systemPrompt = `${SYSTEM_PROMPT_INSTRUCTIONS}\n\n${"═".repeat(60)}\nCONTESTO OPERATIVO:\n${contextBlock}`;
 
   const history: ConversationTurn[] = (conversation ?? [])
     .filter((t) => t.role === "user" || t.role === "assistant")

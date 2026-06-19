@@ -13,6 +13,7 @@
  */
 
 import { checkAvailability } from "./agentAvailability.js";
+import { buildMarketIntelligenceContext } from "./marketIntelligenceLayer.js";
 
 // ── buildManagerAgentLLMContext ───────────────────────────────────────────────
 
@@ -28,8 +29,10 @@ export function buildManagerAgentLLMContext({
   selectedBookingId = null,
   today = new Date().toISOString().slice(0, 10),
 } = {}) {
+  // Decision index by inbox_id for O(1) lookup
   const decisionIndex = Object.fromEntries(decisions.map((d) => [d.inbox_id, d]));
 
+  // Active bookings: only future/current, sorted by checkin, max 25
   const relevantBookings = bookings
     .filter((b) => ACTIVE_STATUSES.has(b.status) && b.checkout >= today)
     .sort((a, b) => a.checkin.localeCompare(b.checkin))
@@ -47,6 +50,7 @@ export function buildManagerAgentLLMContext({
       deposit:     Number(b.deposit ?? 0),
     }));
 
+  // Recent inbox: most recent first, max 15
   const recentInbox = [...inbox]
     .sort((a, b) => (b.created_at ?? "") > (a.created_at ?? "") ? 1 : -1)
     .slice(0, 15)
@@ -73,10 +77,12 @@ export function buildManagerAgentLLMContext({
       };
     });
 
+  // Apartments without the "all" virtual entry
   const aptList = apartments
     .filter((a) => a.id !== "all")
     .map((a) => ({ id: a.id, label: a.label }));
 
+  // Snapshot: compact version (avoid sending raw arrays of hundreds of items)
   const snapshotCompact = snapshot ? {
     summary:              snapshot.agent_summary ?? "",
     suggested_actions:    (snapshot.suggested_actions  ?? []).slice(0, 8).map((a) => ({ priority: a.priority, action: a.action })),
@@ -95,6 +101,7 @@ export function buildManagerAgentLLMContext({
     snapshot:           snapshotCompact,
     selectedThreadId,
     selectedBookingId,
+    market_context:     buildMarketIntelligenceContext(),
   };
 }
 
@@ -102,11 +109,12 @@ export function buildManagerAgentLLMContext({
 
 /**
  * Validate and resolve an LLM-proposed action_plan against real app data.
- * This is the deterministic firewall between the LLM proposal and any DB write.
  *
  * Returns:
  *   { valid: true,  plan: { type, canExecute: true, payload } }  — ready for executeAction
  *   { valid: false, error: string }                              — block + show error
+ *
+ * This is the deterministic firewall between the LLM proposal and any DB write.
  */
 export function validateLLMActionPlan(
   actionPlan,
@@ -156,6 +164,7 @@ export function validateLLMActionPlan(
       if (payload.checkin >= payload.checkout) {
         return { valid: false, error: "Data check-out deve essere successiva al check-in." };
       }
+
       const avail = checkAvailability(
         { aptId: payload.aptId, checkin: payload.checkin, checkout: payload.checkout },
         bookings,
@@ -164,6 +173,7 @@ export function validateLLMActionPlan(
       if (!avail.available) {
         return { valid: false, error: `${apt.label} non è disponibile nel periodo ${payload.checkin} → ${payload.checkout}.` };
       }
+
       return {
         valid: true,
         plan: {
