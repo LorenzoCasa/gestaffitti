@@ -166,6 +166,21 @@ function RevenueBlock({ notes }) {
   );
 }
 
+function SuggestedActions({ actions }) {
+  if (!actions.length) return null;
+  return (
+    <div style={card({ borderColor: C.gold+"33" })}>
+      <h3 style={sectionTitle()}>📋 Azioni Prioritarie ({actions.length})</h3>
+      {actions.slice(0, 8).map((a, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.35rem 0", borderBottom: i < Math.min(actions.length, 8)-1 ? `1px solid ${C.border}` : "none" }}>
+          <PriBadge priority={a.priority} />
+          <span style={{ fontSize: "0.79rem", color: C.text, lineHeight: 1.5, flex: 1 }}>{a.action}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const COMMAND_EXAMPLES = [
   "cosa ho oggi",
   "caparra ricevuta di Rossi",
