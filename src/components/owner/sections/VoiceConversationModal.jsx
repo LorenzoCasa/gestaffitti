@@ -3,6 +3,8 @@ import { useSpeechRecognition } from "../../../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis }   from "../../../hooks/useSpeechSynthesis.js";
 import { interpretMessage }      from "../../../utils/managerAgentBrain.js";
 import { executeAction }         from "../../../utils/managerAgentActions.js";
+import { buildManagerAgentLLMContext, validateLLMActionPlan } from "../../../utils/managerAgentLLMContext.js";
+import { supabase }              from "../../../supabaseClient.js";
 
 const C = {
   gold:    "#c9a96e",
@@ -41,8 +43,13 @@ function TurnBubble({ turn, onConfirm, onCancel, isExecuting }) {
         borderRadius: isUser ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
         padding: "0.55rem 0.75rem",
       }}>
-        <div style={{ fontSize: "0.58rem", color: C.goldDim, marginBottom: "0.18rem", fontWeight: "600", letterSpacing: ".05em" }}>
-          {isUser ? "TU" : "AGENTE"}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.18rem" }}>
+          <div style={{ fontSize: "0.58rem", color: C.goldDim, fontWeight: "600", letterSpacing: ".05em" }}>
+            {isUser ? "TU" : "AGENTE"}
+          </div>
+          {turn.isFallback && (
+            <span style={{ fontSize: "0.52rem", color: C.textDim, background: `${C.textDim}18`, border: `1px solid ${C.textDim}33`, borderRadius: "6px", padding: "0.05rem 0.3rem" }}>offline</span>
+          )}
         </div>
         <div style={{ fontSize: "0.8rem", color: tc, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{turn.text}</div>
         {turn.needsConfirm && !isExecuting && (
@@ -80,24 +87,70 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
 
   const hasPendingConfirm = turns.some(t => t.needsConfirm);
 
-  function handleSend(rawText) {
+  function buildHistory() {
+    return turns
+      .filter(t => t.role === "user" || t.role === "agent")
+      .slice(-10)
+      .map(t => ({ role: t.role === "user" ? "user" : "assistant", content: t.text }));
+  }
+
+  async function handleSend(rawText) {
     const t = (rawText ?? textInput).trim();
     if (!t || isThinking || isExecuting || hasPendingConfirm) return;
     setTextInput("");
     stopSpeech();
     setTurns(prev => [...prev, { id: Date.now(), role: "user", text: t }]);
     setIsThinking(true);
-    setTimeout(() => {
-      const result = interpretMessage(t, { bookings, apartments, inbox, decisions, snapshot, today });
+
+    try {
+      const context = buildManagerAgentLLMContext({ inbox, decisions, bookings, apartments, snapshot, today });
+      const { data, error } = await supabase.functions.invoke("manager-agent-brain", {
+        body: { message: t, conversation: buildHistory(), context },
+      });
+
+      if (error || !data?.reply) throw new Error(error?.message ?? "Edge Function non disponibile");
+
       setIsThinking(false);
+
+      let resolvedPlan = null;
+      let planError = null;
+      if (data.needs_confirmation && data.action_plan) {
+        const validation = validateLLMActionPlan(data.action_plan, { bookings, apartments, today });
+        if (validation.valid) {
+          resolvedPlan = validation.plan;
+        } else {
+          planError = validation.error;
+        }
+      }
+
+      const needsConfirm = !planError && !!resolvedPlan;
+      const replyText = planError
+        ? `${data.reply}\n\n⚠️ Validazione: ${planError}`
+        : data.reply;
+
       setTurns(prev => [...prev, {
-        id: Date.now()+1, role: "agent", text: result.reply,
+        id: Date.now()+1, role: "agent",
+        text: replyText,
+        needsConfirm,
+        actionPlan: needsConfirm ? resolvedPlan : null,
+        options:    data.options ?? [],
+      }]);
+      if (voiceOn && synSupported) speak(data.reply);
+
+    } catch {
+      setIsThinking(false);
+      const ctx = { bookings, apartments, inbox, decisions, snapshot, today };
+      const result = interpretMessage(t, ctx);
+      setTurns(prev => [...prev, {
+        id: Date.now()+1, role: "agent",
+        text: result.reply,
         needsConfirm: result.needs_confirmation,
         actionPlan:   result.needs_confirmation ? result.action_plan : null,
         options:      result.options ?? [],
+        isFallback:   true,
       }]);
       if (voiceOn && synSupported) speak(result.reply);
-    }, 0);
+    }
   }
 
   async function handleConfirm(plan) {
@@ -159,7 +212,7 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
               <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🎙</div>
               <div style={{ fontSize: "0.82rem", color: C.textDim, lineHeight: 1.7 }}>
                 {recSupported
-                  ? "Premi il microfono e parla, oppure digita un comando.\nEs: \"Fammi il punto\" · \"Rossi ha confermato\" · \"Bianchi ha pagato\""
+                  ? "Premi il microfono e parla, oppure digita un comando.\nEs: \"Fammi il punto\" · \"Rossi ha confermato\" · \"Chi devo richiamare?\""
                   : "Il tuo browser non supporta il riconoscimento vocale.\nDigita un comando qui sotto."}
               </div>
             </div>
