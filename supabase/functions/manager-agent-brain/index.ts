@@ -111,6 +111,23 @@ interface MarketContext {
   channel_summary: string;
 }
 
+interface MarketPricingContext {
+  legal_sources_only: boolean;
+  scraping_allowed: boolean;
+  supported_sources: string[];
+  area: string;
+  areas_covered: string[];
+  periods_covered: string[];
+  kb_summary: string;
+  source_trust_rules: Record<string, string>;
+  source_disclaimers: Record<string, string>;
+  kb_benchmark_count: number;
+  kb_is_mock: boolean;
+  no_scraping_rule: string;
+  pricing_advice: Record<string, unknown>;
+  disclaimers: unknown[];
+}
+
 interface AgentContext {
   today: string;
   apartments: ApartmentInfo[];
@@ -120,6 +137,7 @@ interface AgentContext {
   selectedThreadId?: string | null;
   selectedBookingId?: string | null;
   market_context?: MarketContext | null;
+  market_pricing_context?: MarketPricingContext | null;
 }
 
 interface RequestBody {
@@ -149,9 +167,9 @@ HAI DUE RUOLI DISTINTI:
 
 2. CONSULENTE DI MERCATO: sei un esperto di affitti brevi, revenue management e mercato balneare adriatico. Puoi analizzare, confrontare, suggerire strategie e consigliare sul posizionamento.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGOLA MADRE — DISTINZIONE OBBLIGATORIA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📊 DATI GESTIONALE (fonte di verità assoluta):
   → Vengono SOLO dal CONTESTO OPERATIVO fornito.
@@ -168,9 +186,9 @@ REGOLA MADRE — DISTINZIONE OBBLIGATORIA
   → Raccomandazione pratica basata su dati reali + analisi di mercato.
   → Sempre distinguibile da dati certi e da consigli.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGOLE CRITICHE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Non inventare disponibilità, prezzi ufficiali, prenotazioni, caparre, clienti o date del gestionale.
 2. Se un dato interno non è nel contesto: di' "Non ho questo dato nel gestionale."
@@ -182,9 +200,9 @@ REGOLE CRITICHE
 8. Per ambiguità (es. due ospiti con stesso cognome): proponi opzioni numerate.
 9. Per riferimenti vaghi ("quello", "lui"): guarda lo storico della conversazione.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STRUTTURA RISPOSTA (usa quando mescoli gestionale + mercato)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 "📊 Dal gestionale: [dati certi]
 📈 Analisi mercato: [benchmark/stima]
@@ -192,9 +210,25 @@ STRUTTURA RISPOSTA (usa quando mescoli gestionale + mercato)
 
 Per risposte puramente operative o puramente strategiche, usa testo naturale senza struttura a blocchi.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGOLE PREZZI E MERCATO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Puoi SUGGERIRE prezzi e strategie. NON puoi modificarli autonomamente.
+2. Prezzi ufficiali nostri → SOLO dal CONTESTO OPERATIVO (gestionale). Se mancano: di' "Non ho il prezzo ufficiale nel gestionale."
+3. Dati benchmark/competitor → SOLO da market_pricing_context. Fonti ammesse: manual, csv_import, authorized_api, internal_history, mock.
+4. Dichiara SEMPRE la fonte e il livello di fiducia: "Stima strategica (mock)" / "Dato manuale da verificare" / "Fonte autorizzata".
+5. NON dichiarare mai "su Booking costa X€" o "il competitor Y chiede Z€" senza che il dato sia nel context.
+6. NON fare scraping. NON accedere a Booking/Airbnb/Subito esternamente. È vietato e inutile.
+7. Se i dati sono mock/simulati → di' sempre: "Stima strategica basata su benchmark di mercato, non su dati live concorrenza."
+8. Per domande sul prezzo → intent market_analysis o revenue_advice → action_plan: null SEMPRE.
+9. "Alza il prezzo a X€" → spiega che puoi consigliare, non modificare. action_plan: null. needs_confirmation: false.
+10. Se benchmark trust_level="low" (mock) → confidence bassa, mai presentare come dato certo.
+11. Modifica prezzi in futuro: richiederà funzione dedicata + conferma owner. Non disponibile ora.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FORMATO JSON RISPOSTA (obbligatorio)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Rispondi SEMPRE e SOLO con JSON valido in questo formato, senza markdown:
 {
@@ -297,6 +331,21 @@ function buildContextBlock(ctx: AgentContext): string {
     lines.push("\nAZIONI PRIORITARIE:");
     for (const a of ctx.snapshot.suggested_actions.slice(0, 6)) {
       lines.push(`  [P${a.priority}] ${a.action}`);
+    }
+  }
+
+  // Legal market pricing context (sources, trust rules, KB summary)
+  if (ctx.market_pricing_context) {
+    const mpc = ctx.market_pricing_context;
+    lines.push("\n---");
+    lines.push("PREZZI E MERCATO — REGOLE FONTE:");
+    lines.push(`  Scraping: ${mpc.scraping_allowed ? "AMMESSO" : "NON ammesso (viola ToS, tecnica fragile)"}`);
+    lines.push(`  Fonti ammesse: ${(mpc.supported_sources ?? []).join(", ")}`);
+    lines.push(`  KB benchmark disponibili: ${mpc.kb_benchmark_count ?? 0} record (${mpc.kb_is_mock ? "MOCK — non live" : "verificati"})`);
+    if (mpc.kb_summary) lines.push(`  ${mpc.kb_summary}`);
+    if (mpc.no_scraping_rule) lines.push(`  ⚠️  ${mpc.no_scraping_rule}`);
+    if (mpc.source_trust_rules) {
+      lines.push("  Trust: " + Object.entries(mpc.source_trust_rules).map(([k, v]) => `${k}→${v}`).join(", "));
     }
   }
 
