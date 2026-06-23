@@ -120,6 +120,7 @@ interface MarketPricingContext {
   periods_covered: string[];
   kb_summary: string;
   source_trust_rules: Record<string, string>;
+  source_trust_rules: Record<string, string>;
   source_disclaimers: Record<string, string>;
   kb_benchmark_count: number;
   kb_is_mock: boolean;
@@ -510,7 +511,20 @@ async function callAnthropic(
 function parseBrainResponse(raw: string): BrainResponse {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
 
-  const parsed = JSON.parse(cleaned) as Partial<BrainResponse>;
+  let parsed: Partial<BrainResponse>;
+  try {
+    parsed = JSON.parse(cleaned) as Partial<BrainResponse>;
+  } catch {
+    // Claude may wrap JSON in prose or add notes after the object.
+    // Extract from first '{' to last '}' and retry.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      parsed = JSON.parse(cleaned.slice(start, end + 1)) as Partial<BrainResponse>;
+    } else {
+      throw new Error("No JSON object found in LLM response");
+    }
+  }
 
   return {
     reply:                  typeof parsed.reply === "string" ? parsed.reply : "Risposta non disponibile.",
@@ -612,9 +626,14 @@ Deno.serve(async (req: Request) => {
     brainResponse = parseBrainResponse(raw);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[manager-agent-brain] JSON parse error:", msg, "raw:", raw.slice(0, 300));
+    const rawLength = raw.length;
+    const hasJsonStart = raw.includes("{");
+    const hasJsonEnd = raw.includes("}");
+    console.error("[manager-agent-brain] JSON parse error:", msg, { rawLength, hasJsonStart, hasJsonEnd });
+    // Use whatever text Claude returned, stripped of markdown fences.
+    const rawReply = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/m, "").trim().slice(0, 1200);
     brainResponse = {
-      reply: raw.length < 500 ? raw : "Risposta ricevuta ma non strutturata correttamente.",
+      reply: rawReply || "Non riesco a rispondere in questo momento.",
       intent: "no_action",
       confidence: 0.3,
       needs_clarification: false,

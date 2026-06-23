@@ -4,6 +4,7 @@ import { useSpeechSynthesis }   from "../../../hooks/useSpeechSynthesis.js";
 import { interpretMessage }      from "../../../utils/managerAgentBrain.js";
 import { executeAction }         from "../../../utils/managerAgentActions.js";
 import { buildManagerAgentLLMContext, validateLLMActionPlan } from "../../../utils/managerAgentLLMContext.js";
+import { normalizeAgentResponse } from "../../../utils/normalizeAgentResponse.js";
 import { supabase }              from "../../../supabaseClient.js";
 
 const C = {
@@ -119,14 +120,15 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
         body: { message: t, conversation: buildHistory(), context },
       });
 
-      if (error || !data?.reply) throw new Error(error?.message ?? "Edge Function non disponibile");
+      const norm = normalizeAgentResponse(data);
+      if (error || !norm) throw new Error(error?.message ?? "Edge Function non disponibile");
 
       setIsThinking(false);
 
       let resolvedPlan = null;
       let planError = null;
-      if (data.needs_confirmation && data.action_plan) {
-        const validation = validateLLMActionPlan(data.action_plan, { bookings, apartments, today });
+      if (norm.needs_confirmation && norm.action_plan) {
+        const validation = validateLLMActionPlan(norm.action_plan, { bookings, apartments, today });
         if (validation.valid) {
           resolvedPlan = validation.plan;
         } else {
@@ -136,17 +138,17 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
 
       const needsConfirm = !planError && !!resolvedPlan;
       const replyText = planError
-        ? `${data.reply}\n\n💡 Ho capito l'intenzione, ma non posso procedere: ${planError}`
-        : data.reply;
+        ? `${norm.reply}\n\n💡 Ho capito l'intenzione, ma non posso procedere: ${planError}`
+        : norm.reply;
 
       setTurns(prev => [...prev, {
         id: Date.now()+1, role: "agent",
         text: replyText,
         needsConfirm,
         actionPlan: needsConfirm ? resolvedPlan : null,
-        options:    data.options ?? [],
+        options:    norm.options,
       }]);
-      if (voiceOn && synSupported) speak(data.reply);
+      if (voiceOn && synSupported) speak(norm.reply);
 
     } catch {
       setIsThinking(false);
