@@ -14,6 +14,7 @@
 
 import { checkAvailability } from "./agentAvailability.js";
 import { buildMarketIntelligenceContext } from "./marketIntelligenceLayer.js";
+import { buildLegalMarketContext } from "./legalMarketPricingEngine.js";
 
 // ── buildManagerAgentLLMContext ───────────────────────────────────────────────
 
@@ -95,13 +96,14 @@ export function buildManagerAgentLLMContext({
 
   return {
     today,
-    apartments:         aptList,
-    bookings:           relevantBookings,
-    inbox:              recentInbox,
-    snapshot:           snapshotCompact,
+    apartments:             aptList,
+    bookings:               relevantBookings,
+    inbox:                  recentInbox,
+    snapshot:               snapshotCompact,
     selectedThreadId,
     selectedBookingId,
-    market_context:     buildMarketIntelligenceContext(),
+    market_context:         buildMarketIntelligenceContext(),
+    market_pricing_context: buildLegalMarketContext(),
   };
 }
 
