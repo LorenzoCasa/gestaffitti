@@ -129,6 +129,83 @@ interface MarketPricingContext {
   disclaimers: unknown[];
 }
 
+interface PricingRules {
+  source: string;
+  currency: string;
+  stay_rules: {
+    preferred_pattern: string;
+    valid_durations_nights: number[];
+    full_month_eligible: boolean;
+    september_flexible: boolean;
+  };
+  seasonal_rates: Record<string, {
+    month: string;
+    weekly: number;
+    monthly: number;
+    season: string;
+  }>;
+  non_standard_handling: {
+    description: string;
+    rule: string;
+    example_8_nights_august?: string;
+  };
+}
+
+interface Financials {
+  earnedRevenue: number;
+  upcomingRevenue30: number;
+  seasonRevenue: number;
+  depositsPaid: number;
+  depositsPending: number;
+  balancesPending: number;
+  activeBookingsCount: number;
+  seasonYear: number;
+  seasonStart: string;
+  seasonEnd: string;
+  currentSeason: string;
+  hasData: boolean;
+  _note: string;
+}
+
+interface FreeSlot {
+  aptId: string;
+  aptLabel: string;
+  start: string;
+  end: string;
+  nights: number;
+  weeks: number;
+  standardWeeks: boolean;
+  month: number;
+  season: string;
+  estimatedValue: number | null;
+  weeklyRate: number | null;
+  urgencyLevel: string;
+  daysUntilStart: number;
+}
+
+interface DerivedSignals {
+  freeSlots: FreeSlot[];
+  revenueSummary: Financials;
+  openRevenueOpportunities: {
+    total: number;
+    maxRevenueLoss: number;
+    opportunities: Array<FreeSlot & { isPeak: boolean; priorityScore: number; action: string }>;
+  };
+  occupancyByApt: Record<string, { label: string; bookedNights: number; seasonNights: number; occupancyRate: number }>;
+  seasonSignals: {
+    currentMonth: number;
+    seasonYear: number;
+    seasonStart: string;
+    seasonEnd: string;
+    isInSeason: boolean;
+    currentSeason: string;
+    isPeak: boolean;
+    weeklyRate: number | null;
+    daysToSeasonStart: number;
+  };
+  priorityAlerts: Array<{ type: string; severity: string; message: string; value: number }>;
+}
+
 interface AgentContext {
   today: string;
   apartments: ApartmentInfo[];
@@ -139,6 +216,9 @@ interface AgentContext {
   selectedBookingId?: string | null;
   market_context?: MarketContext | null;
   market_pricing_context?: MarketPricingContext | null;
+  pricingRules?: PricingRules | null;
+  financials?: Financials | null;
+  derived?: DerivedSignals | null;
 }
 
 interface RequestBody {
@@ -284,6 +364,58 @@ REGOLE PREZZI E MERCATO
 11. Modifica prezzi in futuro: richiederà funzione dedicata + conferma owner. Non disponibile ora.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEZIONI AGGIUNTIVE NEL CONTESTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PREZZI UFFICIALI GESTIONALE (facts — non modificare, non inventare):
+  → Sezione PREZZI_UFFICIALI nel contesto = tariffe interne del gestionale.
+  → Sono i prezzi da citare come dati certi quando l'owner chiede prezzi interni.
+  → Distinzione obbligatoria: "Prezzo ufficiale gestionale" vs "Benchmark di mercato".
+  → Se l'owner chiede "quanto posso chiedere?": prima il prezzo ufficiale dal gestionale, poi il benchmark di mercato, poi il tuo consiglio.
+
+SITUAZIONE ECONOMICA (facts — non modificare):
+  → Sezione SITUAZIONE_ECONOMICA nel contesto = dati finanziari reali.
+  → Per "fammi il punto economico" / "come siamo messi economicamente": usa questi numeri.
+  → Se manca un dato: di' "Non ho questo dato nel gestionale."
+
+SLOT LIBERI E OPPORTUNITÀ REVENUE (derived — calcolati dal calendario reale):
+  → Sezione SLOT_LIBERI nel contesto = periodi liberi certi (non inventati).
+  → Per "che disponibilità ho?" / "che slot ho?": usa questa sezione.
+  → Per "creami un annuncio": usa slot liberi + prezzi ufficiali come base.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGOLE RISPOSTA — CASI SPECIALI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANNUNCI E MARKETING (es. "creami un annuncio per Subito", "scrivimi un annuncio"):
+  → Produci SEMPRE il testo COMPLETO dell'annuncio, non solo l'introduzione.
+  → Usa apartment label, periodo preciso, prezzo ufficiale dal gestionale come base.
+  → Tono: informale ma professionale, orientato alla famiglia italiana in vacanza.
+  → Struttura annuncio: titolo accattivante / periodo+prezzo / descrizione breve / call to action.
+  → Se ci sono slot liberi nel contesto: usa il primo slot urgente come soggetto dell'annuncio.
+  → Esempio struttura:
+      "🏖 [TITOLO ANNUNCIO]\n📅 Periodo: X–Y\n💶 Prezzo: €Z\n📍 Lungomare Senigallia\n[Descrizione 2-3 righe]\n📩 [Call to action]"
+
+PERIODI NON STANDARD (es. "1-9 agosto" = 8 notti, non multiplo di 7):
+  → Riconosci che non è una settimana standard (7 notti).
+  → Cita il prezzo base settimanale dal gestionale come "Dato gestionale".
+  → Proponi un range come "Consiglio" (non dato certo):
+      "Base: €800/sett. + 1 notte extra (~€114/notte) ≈ €900–950 — da confermare con te"
+  → intent: revenue_advice, action_plan: null, needs_confirmation: false.
+  → Non bloccarti: dai sempre una stima concreta con nota "da confermare".
+
+PUNTO ECONOMICO (es. "fammi il punto economico", "come siamo messi economicamente"):
+  → Usa SITUAZIONE_ECONOMICA per i numeri certi (entrate, caparre, saldi).
+  → Usa SLOT_LIBERI per le opportunità aperte.
+  → Aggiungi analisi di mercato e consiglio priorità operativa.
+  → Struttura: 📊 Dati certi → 📈 Opportunità → 💡 Priorità.
+
+DISPONIBILITÀ STAGIONALE (es. "che disponibilità ho ad agosto?"):
+  → Usa SOLO i dati da SLOT_LIBERI e PRENOTAZIONI ATTIVE.
+  → NON inventare disponibilità — se non è nel contesto, non lo sai.
+  → Elenca: slot liberi per mese, appartamento, date esatte.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FORMATO JSON RISPOSTA (obbligatorio)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -401,6 +533,82 @@ function buildContextBlock(ctx: AgentContext): string {
     }
   }
 
+  // Official pricing rules (gestionale facts — do NOT override)
+  if (ctx.pricingRules?.seasonal_rates) {
+    const pr = ctx.pricingRules;
+    lines.push("\n---");
+    lines.push("PREZZI UFFICIALI GESTIONALE (facts — non modificare, non inventare):");
+    lines.push(`  Fonte: ${pr.source} | Valuta: ${pr.currency}`);
+    lines.push(`  Pattern preferito: ${pr.stay_rules.preferred_pattern}`);
+    lines.push(`  Durate valide: ${pr.stay_rules.valid_durations_nights.join(", ")} notti`);
+    lines.push(`  Settembre flessibile: ${pr.stay_rules.september_flexible ? "SÌ" : "NO"}`);
+    lines.push("  Tariffe stagionali:");
+    for (const [, r] of Object.entries(pr.seasonal_rates)) {
+      lines.push(`    ${(r as { month: string; weekly: number; monthly: number; season: string }).month}: €${(r as { month: string; weekly: number; monthly: number; season: string }).weekly}/sett. | €${(r as { month: string; weekly: number; monthly: number; season: string }).monthly}/mese intero [${(r as { month: string; weekly: number; monthly: number; season: string }).season}]`);
+    }
+    if (pr.non_standard_handling?.example_8_nights_august) {
+      lines.push(`  Caso non-standard: ${pr.non_standard_handling.example_8_nights_august}`);
+    }
+  }
+
+  // Financial summary (gestionale facts)
+  if (ctx.financials?.hasData) {
+    const f = ctx.financials;
+    lines.push("\n---");
+    lines.push("SITUAZIONE ECONOMICA (facts — dati certi dal gestionale):");
+    lines.push(`  Stagione ${f.seasonYear}: entrate confermate €${f.seasonRevenue}`);
+    lines.push(`  Entrate prossimi 30gg: €${f.upcomingRevenue30}`);
+    lines.push(`  Caparre ricevute: €${f.depositsPaid}`);
+    lines.push(`  Caparre da ricevere: €${f.depositsPending}`);
+    lines.push(`  Saldi da incassare: €${f.balancesPending}`);
+    lines.push(`  Prenotazioni attive: ${f.activeBookingsCount}`);
+    lines.push(`  Stagione corrente: ${f.currentSeason}`);
+    lines.push(`  Nota: ${f._note}`);
+  } else if (ctx.financials) {
+    lines.push("\n---");
+    lines.push("SITUAZIONE ECONOMICA: nessun dato disponibile nel gestionale.");
+  }
+
+  // Derived signals: free slots + revenue opportunities
+  if (ctx.derived) {
+    const d = ctx.derived;
+
+    if (d.seasonSignals) {
+      const ss = d.seasonSignals;
+      lines.push("\n---");
+      lines.push(`SEGNALI STAGIONE ${ss.seasonYear}:`);
+      lines.push(`  Stagione: ${ss.seasonStart} → ${ss.seasonEnd}`);
+      lines.push(`  Stagione corrente: ${ss.currentSeason} | In stagione: ${ss.isInSeason ? "SÌ" : "NO"}`);
+      if (ss.daysToSeasonStart > 0) lines.push(`  Giorni all'apertura stagione: ${ss.daysToSeasonStart}`);
+      if (ss.weeklyRate) lines.push(`  Tariffa settimanale mese corrente: €${ss.weeklyRate}`);
+    }
+
+    if (d.freeSlots?.length) {
+      lines.push("\nSLOT LIBERI (calcolati dal calendario reale):");
+      for (const sl of d.freeSlots.slice(0, 10)) {
+        const val = sl.estimatedValue != null ? ` | stima €${sl.estimatedValue}` : "";
+        const urg = sl.urgencyLevel === "high" ? " 🔴URGENTE" : sl.urgencyLevel === "medium" ? " 🟡" : "";
+        lines.push(`  ${sl.aptLabel} | ${sl.start}→${sl.end} | ${sl.nights}n/${sl.weeks}sett.${val}${urg}`);
+      }
+    } else {
+      lines.push("\nSLOT LIBERI: nessuno nel periodo stagionale.");
+    }
+
+    if (d.openRevenueOpportunities?.maxRevenueLoss > 0) {
+      lines.push(`\nOPPORTUNITÀ REVENUE: potenziale €${d.openRevenueOpportunities.maxRevenueLoss} da slot liberi`);
+      for (const opp of (d.openRevenueOpportunities.opportunities ?? []).slice(0, 3)) {
+        lines.push(`  [${opp.urgencyLevel.toUpperCase()}] ${opp.aptLabel} ${opp.start}→${opp.end} — ${opp.action} | stima €${opp.estimatedValue ?? "?"}`);
+      }
+    }
+
+    if (d.occupancyByApt && Object.keys(d.occupancyByApt).length) {
+      lines.push("\nOCCUPANCY STAGIONE:");
+      for (const [id, occ] of Object.entries(d.occupancyByApt)) {
+        lines.push(`  ${(occ as { label: string; occupancyRate: number }).label} (${id}): ${(occ as { label: string; occupancyRate: number }).occupancyRate}% occupato`);
+      }
+    }
+  }
+
   // Legal market pricing context (sources, trust rules, KB summary)
   if (ctx.market_pricing_context) {
     const mpc = ctx.market_pricing_context;
@@ -476,7 +684,7 @@ async function callAnthropic(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1000,
+        max_tokens: 2000,
         system: systemPrompt,
         messages,
       }),
