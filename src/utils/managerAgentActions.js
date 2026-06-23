@@ -71,6 +71,16 @@ export async function executeAction(plan, { onAddBooking, onUpdateBooking } = {}
       return { success: true, message: `Check-in di ${payload.booking.guest} registrato.` };
     }
 
+    case "mark_checkout_done": {
+      if (!onUpdateBooking) return { success: false, message: "onUpdateBooking non disponibile." };
+      const updated = { ...payload.booking, status: "completed" };
+      const result = await onUpdateBooking(payload.booking.id, updated);
+      if (result?.ok === false) {
+        return { success: false, message: `Errore: ${result.error?.message ?? "sconosciuto"}` };
+      }
+      return { success: true, message: `Check-out di ${payload.booking.guest} registrato.` };
+    }
+
     case "cancel_booking": {
       if (!onUpdateBooking) return { success: false, message: "onUpdateBooking non disponibile." };
       const updated = { ...payload.booking, status: "cancelled" };

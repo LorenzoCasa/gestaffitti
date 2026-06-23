@@ -31,7 +31,7 @@ function ensurePulseStyle() {
   document.head.appendChild(s);
 }
 
-function TurnBubble({ turn, onConfirm, onCancel, isExecuting }) {
+function TurnBubble({ turn, onConfirm, onCancel, onOptionSelect, isExecuting }) {
   const isUser = turn.role === "user";
   const bg     = isUser ? "#1e1a12" : turn.error ? `${C.red}14` : turn.success ? `${C.green}12` : "#181410";
   const tc     = turn.error ? C.red : turn.success ? C.green : C.text;
@@ -52,6 +52,17 @@ function TurnBubble({ turn, onConfirm, onCancel, isExecuting }) {
           )}
         </div>
         <div style={{ fontSize: "0.8rem", color: tc, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{turn.text}</div>
+        {/* Options (multiple candidates) */}
+        {!turn.needsConfirm && turn.options?.length > 0 && (
+          <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+            {turn.options.map((opt, i) => (
+              <button key={i} onClick={() => onOptionSelect?.(opt)}
+                style={{ background: `${C.gold}14`, border: `1px solid ${C.gold}44`, borderRadius: "8px", padding: "0.32rem 0.7rem", color: C.gold, fontSize: "0.72rem", cursor: "pointer", textAlign: "left", fontFamily: "Georgia,serif" }}>
+                {i + 1}. {typeof opt === "string" ? opt : (opt.label ?? opt.guest ?? JSON.stringify(opt))}
+              </button>
+            ))}
+          </div>
+        )}
         {turn.needsConfirm && !isExecuting && (
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.65rem", flexWrap: "wrap" }}>
             <button onClick={() => onConfirm(turn.actionPlan)} style={{ background: C.green+"22", border: `1px solid ${C.green}66`, borderRadius: "8px", padding: "0.38rem 0.85rem", color: C.green, fontSize: "0.73rem", cursor: "pointer", fontFamily: "Georgia,serif" }}>✓ Conferma</button>
@@ -125,7 +136,7 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
 
       const needsConfirm = !planError && !!resolvedPlan;
       const replyText = planError
-        ? `${data.reply}\n\n⚠️ Validazione: ${planError}`
+        ? `${data.reply}\n\n💡 Ho capito l'intenzione, ma non posso procedere: ${planError}`
         : data.reply;
 
       setTurns(prev => [...prev, {
@@ -217,7 +228,7 @@ export default function VoiceConversationModal({ open, onClose, bookings=[], apa
               </div>
             </div>
           )}
-          {turns.map(turn => <TurnBubble key={turn.id} turn={turn} onConfirm={handleConfirm} onCancel={handleCancel} isExecuting={isExecuting} />)}
+          {turns.map(turn => <TurnBubble key={turn.id} turn={turn} onConfirm={handleConfirm} onCancel={handleCancel} onOptionSelect={(opt) => { const label = typeof opt === "string" ? opt : (opt.label ?? opt.guest ?? JSON.stringify(opt)); setTextInput(label); }} isExecuting={isExecuting} />)}
           {isThinking && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", padding: "0.35rem 0.1rem" }}>
               <div style={{ width: "22px", height: "22px", border: `2px solid ${C.border}`, borderTop: `2px solid ${C.gold}`, borderRadius: "50%", animation: "vc-spin 0.8s linear infinite" }} />

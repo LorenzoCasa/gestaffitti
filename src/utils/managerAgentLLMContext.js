@@ -148,6 +148,15 @@ export function validateLLMActionPlan(
       return { valid: true, plan: { type: "mark_checkin_done", canExecute: true, payload: { booking } } };
     }
 
+    case "mark_checkout_done": {
+      const booking = bookings.find((b) => b.id === payload?.bookingId);
+      if (!booking) return { valid: false, error: `Prenotazione non trovata (ID: ${payload?.bookingId}).` };
+      if (booking.status === "completed") {
+        return { valid: false, error: `Check-out di ${booking.guest} è già registrato.` };
+      }
+      return { valid: true, plan: { type: "mark_checkout_done", canExecute: true, payload: { booking } } };
+    }
+
     case "cancel_booking": {
       const booking = bookings.find((b) => b.id === payload?.bookingId);
       if (!booking) return { valid: false, error: `Prenotazione non trovata (ID: ${payload?.bookingId}).` };
