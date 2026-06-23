@@ -120,6 +120,7 @@ interface MarketPricingContext {
   periods_covered: string[];
   kb_summary: string;
   source_trust_rules: Record<string, string>;
+  source_trust_rules: Record<string, string>;
   source_disclaimers: Record<string, string>;
   kb_benchmark_count: number;
   kb_is_mock: boolean;
@@ -625,7 +626,10 @@ Deno.serve(async (req: Request) => {
     brainResponse = parseBrainResponse(raw);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[manager-agent-brain] JSON parse error:", msg, "raw:", raw.slice(0, 300));
+    const rawLength = raw.length;
+    const hasJsonStart = raw.includes("{");
+    const hasJsonEnd = raw.includes("}");
+    console.error("[manager-agent-brain] JSON parse error:", msg, { rawLength, hasJsonStart, hasJsonEnd });
     // Use whatever text Claude returned, stripped of markdown fences.
     const rawReply = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/m, "").trim().slice(0, 1200);
     brainResponse = {

@@ -122,6 +122,114 @@ test("N14 — reply trimmed", () => {
   assertEqual(r.reply, "Ciao!");
 });
 
+// ── Reply path resolution ───────────────────────────────────────────────────
+
+console.log("\nnormalizeAgentResponse — reply path resolution:");
+
+test("N15 — data.result.reply path → reply and intent from result", () => {
+  const data = { result: { reply: "Ciao da result.", intent: "show_calendar_status", confidence: 0.8 } };
+  const r = normalizeAgentResponse(data);
+  assert(r !== null, "not null");
+  assertEqual(r.reply, "Ciao da result.");
+  assertEqual(r.intent, "show_calendar_status");
+  assertEqual(r.confidence, 0.8);
+});
+
+test("N16 — data.data.reply path → reply extracted", () => {
+  const data = { data: { reply: "Ciao da data.", intent: "no_action" } };
+  const r = normalizeAgentResponse(data);
+  assert(r !== null, "not null");
+  assertEqual(r.reply, "Ciao da data.");
+});
+
+test("N17 — data.message path (no .reply) → reply from message", () => {
+  const data = { message: "Risposta via message.", intent: "no_action" };
+  const r = normalizeAgentResponse(data);
+  assert(r !== null, "not null");
+  assertEqual(r.reply, "Risposta via message.");
+});
+
+test("N18 — data.reply whitespace falls through to data.result.reply", () => {
+  const data = { reply: "   ", result: { reply: "Risposta da result." } };
+  const r = normalizeAgentResponse(data);
+  assert(r !== null, "not null");
+  assertEqual(r.reply, "Risposta da result.", "should use result.reply when top-level is whitespace");
+});
+
+test("N19 — data.reply takes priority over data.result.reply", () => {
+  const data = { reply: "Top level.", result: { reply: "Result level." } };
+  const r = normalizeAgentResponse(data);
+  assertEqual(r.reply, "Top level.", "top-level reply has priority");
+});
+
+test("N20 — all four paths fail → null", () => {
+  const data = { reply: "  ", result: { reply: 0 }, data: { reply: null }, message: "" };
+  assertEqual(normalizeAgentResponse(data), null, "null when no valid reply anywhere");
+});
+
+// ── Required fields completeness ────────────────────────────────────────────
+
+console.log("\nnormalizeAgentResponse — required fields:");
+
+const REQUIRED_FIELDS = ["reply","intent","confidence","needs_clarification","clarification_question",
+  "needs_confirmation","action_plan","options","resolved_references","missing_fields",
+  "data_used","reasoning_summary","fallback"];
+
+test("N21 — normalized response always has all 13 required fields", () => {
+  const r = normalizeAgentResponse({ reply: "Ok." });
+  assert(r !== null);
+  for (const f of REQUIRED_FIELDS) {
+    assert(f in r, `field "${f}" missing`);
+  }
+});
+
+test("N22 — data_used missing → default object with empty arrays", () => {
+  const r = normalizeAgentResponse({ reply: "Ok." });
+  assert(r !== null);
+  assert(r.data_used && typeof r.data_used === "object", "data_used is object");
+  for (const k of ["bookings","inbox","decisions","apartments","market"]) {
+    assert(Array.isArray(r.data_used[k]), `data_used.${k} is array`);
+  }
+});
+
+test("N23 — data_used present → preserved", () => {
+  const du = { bookings: ["b1"], inbox: [], decisions: [], apartments: ["apt1"], market: [] };
+  const r = normalizeAgentResponse({ reply: "Ok.", data_used: du });
+  assert(r !== null);
+  assertEqual(r.data_used.bookings[0], "b1", "data_used.bookings preserved");
+  assertEqual(r.data_used.apartments[0], "apt1", "data_used.apartments preserved");
+});
+
+test("N24 — reasoning_summary string → preserved", () => {
+  const r = normalizeAgentResponse({ reply: "Ok.", reasoning_summary: "Ho trovato Rossi in booking b1." });
+  assert(r !== null);
+  assertEqual(r.reasoning_summary, "Ho trovato Rossi in booking b1.");
+});
+
+test("N25 — reasoning_summary non-string → null", () => {
+  const r = normalizeAgentResponse({ reply: "Ok.", reasoning_summary: 42 });
+  assert(r !== null);
+  assertEqual(r.reasoning_summary, null);
+});
+
+test("N26 — _fallback: true (Edge Function debug field) → fallback: true", () => {
+  const r = normalizeAgentResponse({ reply: "Risposta di fallback.", _fallback: true });
+  assert(r !== null);
+  assertEqual(r.fallback, true);
+});
+
+test("N27 — fallback: true (explicit) → fallback: true", () => {
+  const r = normalizeAgentResponse({ reply: "Risposta.", fallback: true });
+  assert(r !== null);
+  assertEqual(r.fallback, true);
+});
+
+test("N28 — no fallback field → fallback: false", () => {
+  const r = normalizeAgentResponse({ reply: "Risposta normale." });
+  assert(r !== null);
+  assertEqual(r.fallback, false);
+});
+
 // ── Edge Function parseBrainResponse logic (mirrored in JS) ──────────────────
 
 console.log("\nparseBrainResponse logic — JSON extraction:");
