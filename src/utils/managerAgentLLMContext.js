@@ -15,7 +15,7 @@
 import { checkAvailability } from "./agentAvailability.js";
 import { buildMarketIntelligenceContext } from "./marketIntelligenceLayer.js";
 import { buildLegalMarketContext } from "./legalMarketPricingEngine.js";
-import { getRentalPricingRules, buildRevenueSummary, buildDerivedSignals } from "./rentalBusinessBrain.js";
+import { getRentalPricingRules, buildRevenueSummary, buildDerivedSignals, draftSubitoPromotion } from "./rentalBusinessBrain.js";
 
 // ── buildManagerAgentLLMContext ───────────────────────────────────────────────
 
@@ -96,6 +96,13 @@ export function buildManagerAgentLLMContext({
   } : null;
 
   const pricingRules = getRentalPricingRules();
+  const derived      = buildDerivedSignals(bookings, apartments, pricingRules, today);
+
+  // Pre-build promo draft for top urgency slot so the Edge Function can inject it
+  // directly into the context block and use it as repair fallback.
+  const topSlot        = derived?.freeSlots?.[0] ?? null;
+  const topApt         = topSlot ? (aptList.find(a => a.id === topSlot.aptId) ?? null) : null;
+  const promoReadyDraft = draftSubitoPromotion(topSlot, pricingRules, topApt);
 
   return {
     today,
@@ -109,7 +116,8 @@ export function buildManagerAgentLLMContext({
     market_pricing_context: buildLegalMarketContext(),
     pricingRules,
     financials:             buildRevenueSummary(bookings, pricingRules, today),
-    derived:                buildDerivedSignals(bookings, apartments, pricingRules, today),
+    derived,
+    promoReadyDraft,
   };
 }
 
