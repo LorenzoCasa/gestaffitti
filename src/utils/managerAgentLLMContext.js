@@ -15,6 +15,7 @@
 import { checkAvailability } from "./agentAvailability.js";
 import { buildMarketIntelligenceContext } from "./marketIntelligenceLayer.js";
 import { buildLegalMarketContext } from "./legalMarketPricingEngine.js";
+import { getRentalPricingRules, buildRevenueSummary, buildDerivedSignals } from "./rentalBusinessBrain.js";
 
 // ── buildManagerAgentLLMContext ───────────────────────────────────────────────
 
@@ -94,6 +95,8 @@ export function buildManagerAgentLLMContext({
     calendar_alerts:      (snapshot.calendar_alerts       ?? []).slice(0, 8),
   } : null;
 
+  const pricingRules = getRentalPricingRules();
+
   return {
     today,
     apartments:             aptList,
@@ -104,6 +107,9 @@ export function buildManagerAgentLLMContext({
     selectedBookingId,
     market_context:         buildMarketIntelligenceContext(),
     market_pricing_context: buildLegalMarketContext(),
+    pricingRules,
+    financials:             buildRevenueSummary(bookings, pricingRules, today),
+    derived:                buildDerivedSignals(bookings, apartments, pricingRules, today),
   };
 }
 
