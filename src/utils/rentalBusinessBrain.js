@@ -154,6 +154,23 @@ export function estimateStayPrice(period, pricingRules) {
     };
   }
 
+  // 4 settimane piene → propone tariffa mensile (CLAUDE.md: "mese intero valutabile")
+  if (extraNights === 0 && weeks === 4) {
+    return {
+      totalPrice:        r.monthly,
+      weeklyRate:        r.weekly,
+      monthlyRate:       r.monthly,
+      nights,
+      weeks,
+      month,
+      season:            r.season,
+      pricingType:       "near_full_month",
+      isStandard:        false,
+      needsConfirmation: true,
+      notes:             ["4w_suggest_monthly_rate"],
+    };
+  }
+
   // Non-standard (e.g. 8 nights = 1 week + 1 extra)
   const basePrice          = r.weekly * Math.max(weeks, 0);
   const nightlyRateEstimate = Math.round(r.weekly / 7);
@@ -361,7 +378,7 @@ export function buildRevenueSummary(bookings, pricingRules, today) {
   const yearStr = today.slice(0, 4);
 
   const activeBookings = (bookings ?? []).filter(b => ACTIVE_STATUSES.has(b.status ?? "confirmed"));
-  const pastBookings   = (bookings ?? []).filter(b => b.checkout <= today && b.checkin >= `${yearStr}-01-01`);
+  const pastBookings   = (bookings ?? []).filter(b => ACTIVE_STATUSES.has(b.status ?? "confirmed") && b.checkout <= today && b.checkin >= `${yearStr}-01-01`);
 
   const earnedRevenue = pastBookings.reduce((s, b) => s + Number(b.price ?? 0), 0);
 

@@ -333,6 +333,29 @@ test("buildDerivedSignals — nessun side effect (pura)", () => {
   assert.equal(aptsCopy.length, APARTMENTS.length);
 });
 
+// ── Fix: earnedRevenue esclude cancelled (bug bloccante #1) ──────────────────
+
+test("buildRevenueSummary — prenotazione cancelled esclusa da earnedRevenue", () => {
+  const confirmedPast = { id: "bPast", apt: "apt1", checkin: "2026-06-01", checkout: "2026-06-08", status: "confirmed", price: 500, deposit: 200, deposit_paid: true };
+  const cancelledPast = { id: "bCanc", apt: "apt1", checkin: "2026-06-08", checkout: "2026-06-15", status: "cancelled", price: 500, deposit: 100, deposit_paid: false };
+  const r = buildRevenueSummary([confirmedPast, cancelledPast], PRICING_RULES, "2026-06-24");
+  // Solo confirmedPast deve contribuire a earnedRevenue, cancelledPast no
+  assert.equal(r.earnedRevenue, 500, `earnedRevenue atteso 500 (solo confirmed), trovato ${r.earnedRevenue}`);
+});
+
+// ── Fix: 28 notti usa mensile invece di settimane×4 (bug bloccante #2) ───────
+
+test("estimateStayPrice — 28 notti agosto → tariffa mensile 2600€ (near_full_month)", () => {
+  const r = estimateStayPrice({ checkin: "2026-08-01", checkout: "2026-08-29" }, PRICING_RULES);
+  assert.equal(r.nights,      28,     `nights atteso 28, trovato ${r.nights}`);
+  assert.equal(r.weeks,       4,      `weeks atteso 4, trovato ${r.weeks}`);
+  assert.equal(r.totalPrice,  2600,   `totalPrice atteso 2600 (mensile agosto, non 3200), trovato ${r.totalPrice}`);
+  assert.equal(r.pricingType, "near_full_month");
+  assert.equal(r.needsConfirmation, true,  "deve richiedere conferma owner");
+  assert.equal(r.isStandard,  false);
+  assert.ok(r.notes.includes("4w_suggest_monthly_rate"));
+});
+
 // ── Sicurezza (FASE 7 — punto 7) ─────────────────────────────────────────────
 
 test("sicurezza — tutte le funzioni sono pure: nessuna scrittura DB", () => {
