@@ -219,6 +219,7 @@ interface AgentContext {
   pricingRules?: PricingRules | null;
   financials?: Financials | null;
   derived?: DerivedSignals | null;
+  promoReadyDraft?: { title: string; body: string; fullText: string; dateRange: string; priceLabel: string } | null;
 }
 
 interface RequestBody {
@@ -387,14 +388,13 @@ SLOT LIBERI E OPPORTUNITÀ REVENUE (derived — calcolati dal calendario reale):
 REGOLE RISPOSTA — CASI SPECIALI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ANNUNCI E MARKETING (es. "creami un annuncio per Subito", "scrivimi un annuncio"):
-  → Produci SEMPRE il testo COMPLETO dell'annuncio, non solo l'introduzione.
-  → Usa apartment label, periodo preciso, prezzo ufficiale dal gestionale come base.
-  → Tono: informale ma professionale, orientato alla famiglia italiana in vacanza.
-  → Struttura annuncio: titolo accattivante / periodo+prezzo / descrizione breve / call to action.
-  → Se ci sono slot liberi nel contesto: usa il primo slot urgente come soggetto dell'annuncio.
-  → Esempio struttura:
-      "🏖 [TITOLO ANNUNCIO]\n📅 Periodo: X–Y\n💶 Prezzo: €Z\n📍 Lungomare Senigallia\n[Descrizione 2-3 righe]\n📩 [Call to action]"
+ANNUNCI E MARKETING (es. "creami un annuncio per Subito", "scrivimi un annuncio", "il messaggio da mettere su Subito"):
+  → Produci SEMPRE il testo COMPLETO dell'annuncio nella reply — titolo + testo + call to action.
+  → Se nel contesto c'è BOZZA_ANNUNCIO_PRONTO: usala come base, copiarla e migliorarla è corretto.
+  → NON rispondere solo "Eccolo" / "Ecco il testo" / "Copia e incolla" senza il corpo — il testo DEVE essere nella reply.
+  → Anche su follow-up ("mi devi scrivere il messaggio"): ripeti il testo completo, non fare riferimento a una risposta precedente.
+  → Struttura obbligatoria: TITOLO su riga separata / riga vuota / TESTO con periodo, prezzo, descrizione, call to action.
+  → Tono: informale ma professionale, orientato alla famiglia italiana in vacanza al mare.
 
 PERIODI NON STANDARD (es. "1-9 agosto" = 8 notti, non multiplo di 7):
   → Riconosci che non è una settimana standard (7 notti).
@@ -609,6 +609,18 @@ function buildContextBlock(ctx: AgentContext): string {
     }
   }
 
+  // Pre-built promo draft — use directly for marketing/Subito requests
+  if (ctx.promoReadyDraft) {
+    const p = ctx.promoReadyDraft;
+    lines.push("\n---");
+    lines.push("BOZZA_ANNUNCIO_PRONTO (per richieste annuncio/inserzione/testo Subito — copia e migliora):");
+    lines.push(`  TITOLO: ${p.title}`);
+    lines.push(`  TESTO:`);
+    for (const row of p.body.split("\n")) {
+      lines.push(`    ${row}`);
+    }
+  }
+
   // Legal market pricing context (sources, trust rules, KB summary)
   if (ctx.market_pricing_context) {
     const mpc = ctx.market_pricing_context;
@@ -750,6 +762,73 @@ function parseBrainResponse(raw: string): BrainResponse {
   };
 }
 
+// ── Marketing reply repair ────────────────────────────────────────────────────
+
+const MARKETING_KEYWORDS_TS = [
+  "annuncio", "inserzione", "messaggio da mettere", "testo da mettere",
+  "testo per subito", "metti su subito", "copia su subito",
+  "pubblicare su subito", "promuovere", "promuovi", "post per subito", "annuncio subito",
+];
+
+function detectMarketingIntentTS(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return MARKETING_KEYWORDS_TS.some(kw => lower.includes(kw));
+}
+
+const HOLLOW_RE = /^(eccolo|ecco il testo|annuncio pronto|copia e incolla|ecco la bozza|perfetto)[.!,\s]*/i;
+
+function isReplyBodyMissingTS(reply: string): boolean {
+  const trimmed = reply.trim();
+  if (trimmed.length < 120) return true;
+  return HOLLOW_RE.test(trimmed);
+}
+
+function buildInlinePromoText(ctx: AgentContext): string | null {
+  // Use pre-built draft if available
+  if (ctx.promoReadyDraft) {
+    const p = ctx.promoReadyDraft;
+    return `TITOLO:\n${p.title}\n\nTESTO:\n${p.body}`;
+  }
+  // Fallback: build from top free slot
+  const topSlot = ctx.derived?.freeSlots?.[0] as Record<string, unknown> | undefined;
+  if (!topSlot) return null;
+
+  const aptId   = topSlot.aptId as string;
+  const apt     = ctx.apartments.find(a => a.id === aptId);
+  const aptLabel = apt?.label ?? (topSlot.aptLabel as string) ?? "Appartamento";
+
+  const start   = topSlot.start as string;
+  const end     = topSlot.end as string;
+  const nights  = topSlot.nights as number;
+  const estVal  = topSlot.estimatedValue as number | null;
+  const weeks   = topSlot.weeks as number;
+
+  const MONTHS: Record<number, string> = { 6: "giugno", 7: "luglio", 8: "agosto", 9: "settembre", 10: "ottobre" };
+  const sm = parseInt(start.slice(5, 7), 10);
+  const em = parseInt(end.slice(5, 7), 10);
+  const sd = parseInt(start.slice(8, 10), 10);
+  const ed = parseInt(end.slice(8, 10), 10);
+  const dateRange = sm === em
+    ? `${sd}–${ed} ${MONTHS[sm] ?? ""}`
+    : `${sd} ${MONTHS[sm] ?? ""} – ${ed} ${MONTHS[em] ?? ""}`;
+  const priceLabel = estVal != null ? `€${estVal} (da confermare)` : "prezzo da confermare";
+  const weeksLabel = weeks === 1 ? "1 settimana" : weeks > 1 ? `${weeks} settimane` : `${nights} notti`;
+
+  const title = `🏖 ${aptLabel} — ${dateRange} disponibile`;
+  const body = [
+    `📅 Periodo: ${dateRange} (${nights} notti / ${weeksLabel})`,
+    `💶 Prezzo consigliato: ${priceLabel}`,
+    `📍 Lungomare Senigallia, Spiaggia di Velluto`,
+    ``,
+    `${aptLabel} disponibile per il periodo ${dateRange}.`,
+    `Ideale per famiglie o coppie. Posizione fronte mare sul lungomare di Senigallia.`,
+    ``,
+    `📩 Contattami indicando numero di persone e periodo richiesto. Risposta rapida garantita.`,
+  ].join("\n");
+
+  return `TITOLO:\n${title}\n\nTESTO:\n${body}`;
+}
+
 // ── Fallback response ─────────────────────────────────────────────────────────
 
 function fallbackResponse(reason: string): BrainResponse {
@@ -854,6 +933,19 @@ Deno.serve(async (req: Request) => {
       data_used: { bookings: [], inbox: [], decisions: [], apartments: [], market: [] },
       reasoning_summary: null,
     };
+  }
+
+  // Marketing repair: if owner asked for ad text and LLM returned only a hollow intro,
+  // inject the pre-built promo draft so the reply always contains usable content.
+  if (detectMarketingIntentTS(message) && isReplyBodyMissingTS(brainResponse.reply)) {
+    const draft = buildInlinePromoText(context);
+    if (draft) {
+      const intro = brainResponse.reply.trim() ? `${brainResponse.reply.trim()}\n\n` : "";
+      brainResponse = {
+        ...brainResponse,
+        reply: `${intro}---\n\n${draft}`,
+      };
+    }
   }
 
   return json(brainResponse, 200);
