@@ -75,9 +75,10 @@ function HistoryMessageRow({ msg }) {
 
 // ── Conversation card — gestisce sia singolo messaggio che thread ─────────────
 
-function ConversationCard({ thread, apartments, bookings, aptRules, decisions, onMarkDone }) {
+function ConversationCard({ thread, apartments, bookings, aptRules, decisions, onMarkDone, onApprove }) {
   const [showHistory, setShowHistory] = useState(false);
   const [copied,      setCopied]      = useState(false);
+  const [localText,   setLocalText]   = useState(null); // null = owner has not edited the text
 
   const { latestMessage: item, isThread, messageCount, messages, allIds } = thread;
   const realApts  = apartments.filter(a => a.id !== "all");
@@ -124,8 +125,15 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
   const llmText       = agentDecision?.suggested_text || null;
   const isLlmGenerated = llmText && !agentDecision?.payload?.llm_failed;
 
-  // Testo da mostrare: LLM se disponibile, altrimenti template deterministico
+  // Testo base: LLM se disponibile, altrimenti template deterministico
   const responseText = llmText ?? templateText;
+
+  // Testo effettivamente mostrato: priorità all'eventuale modifica locale dell'owner
+  const displayText  = localText ?? responseText;
+  // Considera modified solo se il testo è davvero cambiato rispetto al suggerimento originale
+  const wasModified  = localText !== null && localText !== responseText;
+
+  const isApproved   = !!agentDecision?.approved_at;
 
   // Subito link: cerca in tutti i messaggi del thread, dal più recente
   const subitoLink = [...messages].reverse().reduce((found, msg) => {
@@ -149,11 +157,16 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
     : checkin ? "dal " + fmtShortDate(checkin) : null;
 
   function handleCopy() {
-    if (!responseText) return;
-    navigator.clipboard.writeText(responseText).then(() => {
+    if (!displayText) return;
+    navigator.clipboard.writeText(displayText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     });
+  }
+
+  async function handleApprove() {
+    if (!agentDecision?.id || !onApprove) return;
+    await onApprove(agentDecision.id, { finalText: displayText, wasModified });
   }
 
   const btnPrimary = {
@@ -227,25 +240,53 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
         )}
       </div>
 
-      {/* ── Risposta suggerita (sull'ultimo messaggio del thread) ── */}
+      {/* ── Risposta suggerita / editabile ── */}
       {responseText && (
-        <div style={{
-          fontSize: "0.78rem", color: "#a0d8a0", lineHeight: "1.55",
-          background: "#0a140a", border: "1px solid #2a4a2a55",
-          borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.55rem",
-          whiteSpace: "pre-wrap",
-        }}>
-          <div style={{ fontSize: "0.58rem", color: isLlmGenerated ? "#6a9a9a" : "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: "0.35rem", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
-            {isLlmGenerated ? "✨ Risposta Claude" : `Risposta suggerita${isThread ? " (ultimo messaggio)" : ""}`}
+        <div style={{ marginBottom: "0.55rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
+            <span style={{ fontSize: "0.58rem", color: isLlmGenerated ? "#6a9a9a" : "#4a8a4a", letterSpacing: "0.09em", textTransform: "uppercase", fontFamily: "'Playfair Display',serif", fontWeight: "700" }}>
+              {isLlmGenerated ? "✨ Risposta Claude" : `Risposta suggerita${isThread ? " (ultimo messaggio)" : ""}`}
+            </span>
+            {isApproved && (
+              <span style={{ fontSize: "0.58rem", color: "#6ec99a", background: "#0a1a0a", border: "1px solid #6ec99a33", borderRadius: "10px", padding: "0.05rem 0.4rem" }}>
+                ✓ Approvata
+              </span>
+            )}
+            {wasModified && !isApproved && (
+              <span style={{ fontSize: "0.58rem", color: "#c9a96e", background: "#1a1200", border: "1px solid #c9a96e33", borderRadius: "10px", padding: "0.05rem 0.4rem" }}>
+                ✏️ Modificata
+              </span>
+            )}
           </div>
-          {responseText}
+          <textarea
+            value={displayText ?? ""}
+            onChange={e => setLocalText(e.target.value)}
+            rows={Math.min(12, (displayText ?? "").split("\n").length + 2)}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              fontSize: "0.78rem", color: "#a0d8a0", lineHeight: "1.55",
+              background: "#0a140a", border: "1px solid #2a4a2a55",
+              borderRadius: "8px", padding: "0.6rem 0.75rem",
+              fontFamily: "Georgia,serif", resize: "vertical",
+              outline: "none",
+            }}
+          />
         </div>
       )}
 
       {/* ── Action bar ── */}
       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
 
-        {responseText ? (
+        {/* Approva risposta — solo se c'è una decision DB e non è ancora approvata */}
+        {agentDecision?.id && !isApproved && displayText && (
+          <button
+            onClick={handleApprove}
+            style={{ ...btnPrimary, background: "#0a1a2a", color: "#6ea0c9", border: "1px solid #6ea0c933" }}>
+            ✓ Approva risposta
+          </button>
+        )}
+
+        {displayText ? (
           <button
             onClick={handleCopy}
             style={{ ...btnPrimary, background: copied ? "#1a4a1a" : "#1a1a3a", color: copied ? "#6ec99a" : "#9999dd" }}>
@@ -321,7 +362,7 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
 
 // ── Sezione principale ────────────────────────────────────────────────────────
 
-export default function MessaggiSection({ apartments, bookings, inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied, markDecisionSent }) {
+export default function MessaggiSection({ apartments, bookings, inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied, markDecisionSent, approveDecision }) {
   const [tab, setTab] = useState("nuovi");
 
   const threads  = groupInboxByThread(inbox ?? []);
@@ -339,6 +380,10 @@ export default function MessaggiSection({ apartments, bookings, inbox, decisions
     if (decisionId && markDecisionSent) {
       await markDecisionSent(decisionId);
     }
+  }
+
+  async function handleApprove(id, { finalText, wasModified }) {
+    if (approveDecision) await approveDecision(id, { finalText, wasModified });
   }
 
   return (
@@ -403,6 +448,7 @@ export default function MessaggiSection({ apartments, bookings, inbox, decisions
           aptRules={aptRules}
           decisions={decisions ?? []}
           onMarkDone={handleMarkDone}
+          onApprove={handleApprove}
         />
       ))}
     </div>
