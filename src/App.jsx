@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { MONTHS, MONTHS_LONG } from "./constants";
-import { formatDate, nightCount } from "./utils/dateUtils";
+import { MONTHS } from "./constants";
 import LoadingScreen from "./components/LoadingScreen";
 import LoginScreen from "./components/LoginScreen";
 import CleanerView from "./components/CleanerView";
 import DayPopup from "./components/shared/DayPopup";
+import DashboardSection from "./components/owner/sections/DashboardSection";
+import CalendarSection from "./components/owner/sections/CalendarSection";
 import OperationsSection from "./components/owner/sections/OperationsSection";
 import GuestsSection from "./components/owner/sections/GuestsSection";
 import SettingsSection from "./components/owner/sections/SettingsSection";
@@ -51,11 +52,10 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
   const pendingCleaning=filtered(bookings).filter(b=>!b.cleaning&&b.checkout<=today);
   const pendingCheckin=filtered(bookings).filter(b=>!b.checkinDone&&b.checkin>=today&&b.checkin<=new Date(Date.now()+86400000*3).toISOString().split("T")[0]);
 
-  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
-  const firstDay=((new Date(calYear,calMonth,1).getDay())+6)%7;
-  function getBookingsForDay(day){const d=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;return filtered(bookings).filter(b=>b.checkin<=d&&b.checkout>d);}
-  function openDayPopup(day){const d=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;setDayPopup({dateStr:d,bookings:filtered(bookings).filter(b=>b.checkin<=d&&b.checkout>d)});}
-  function getDayRole(b,day){const d=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;if(b.checkin===d)return"checkin";if(b.checkout===d)return"checkout";return"stay";}
+  function openDayPopup(day){
+    const d=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    setDayPopup({dateStr:d,bookings:filteredBookings.filter(b=>b.checkin<=d&&b.checkout>d)});
+  }
 
   const byMonth=Array.from({length:12},(_,i)=>{
     const m=String(i+1).padStart(2,"0");
@@ -119,87 +119,24 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 
         {/* DASHBOARD */}
         {section==="dashboard"&&(
-          <div>
-            <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.2rem",marginBottom:"0.9rem",marginTop:"0.4rem"}}>{activeFilter!=="all"?aptLabel(activeFilter):"Panoramica Generale"}</h2>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"0.6rem",marginBottom:"1rem"}}>
-              {[{label:"Entrate",value:`€${totalRevenue.toLocaleString("it")}`,icon:"💶",color:"#6ec99a"},{label:"Spese",value:`€${totalExpAmt.toLocaleString("it")}`,icon:"📤",color:"#c96e6e"},{label:"Utile Netto",value:`€${netProfit.toLocaleString("it")}`,icon:"📈",color:netProfit>=0?"#c9a96e":"#c96e6e"},{label:"Prenotazioni",value:filtered(bookings).length,icon:"🔑",color:"#9e6ec9"}].map(k=>(
-                <div key={k.label} style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem",textAlign:"center"}}>
-                  <div style={{fontSize:"1.3rem",marginBottom:"0.25rem"}}>{k.icon}</div>
-                  <div style={{fontSize:"1.2rem",fontWeight:"700",color:k.color,fontFamily:"'Playfair Display',serif"}}>{k.value}</div>
-                  <div style={{fontSize:"0.62rem",color:"#6a5a40",letterSpacing:"0.06em",textTransform:"uppercase",marginTop:"0.2rem"}}>{k.label}</div>
-                </div>
-              ))}
-            </div>
-            {pendingDeposits.length>0&&(
-              <div style={{background:"rgba(201,169,110,0.08)",border:"1px solid #c9a96e44",borderRadius:"10px",padding:"0.8rem",marginBottom:"0.9rem"}}>
-                <div style={{color:"#c9a96e",fontSize:"0.8rem",fontWeight:"600",marginBottom:"0.5rem"}}>💳 Caparre in attesa ({pendingDeposits.length})</div>
-                {pendingDeposits.map(b=>(
-                  <div key={b.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.3rem 0",borderTop:"1px solid #2a2010"}}>
-                    <span style={{color:"#e8d5b0",fontSize:"0.8rem"}}>{b.guest}</span>
-                    <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
-                      <span style={{color:"#c9a96e",fontSize:"0.8rem"}}>€{b.deposit}</span>
-                      <button onClick={()=>onToggleDeposit(b.id)} style={{background:"#2a2010",border:"1px solid #3a3020",borderRadius:"6px",padding:"0.2rem 0.45rem",color:"#6ec99a",cursor:"pointer",fontSize:"0.68rem"}}>✓ Ricevuta</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {(pendingCleaning.length>0||pendingCheckin.length>0)&&(
-              <div style={{display:"flex",flexDirection:"column",gap:"0.45rem",marginBottom:"0.9rem"}}>
-                {pendingCleaning.length>0&&<div style={{background:"rgba(201,110,110,0.1)",border:"1px solid #c96e6e44",borderRadius:"10px",padding:"0.7rem 0.8rem",display:"flex",alignItems:"center",gap:"0.6rem"}}><span>🧹</span><span style={{color:"#c96e6e",fontSize:"0.78rem"}}><b>{pendingCleaning.length}</b> pulizie post check-out in attesa</span></div>}
-                {pendingCheckin.length>0&&<div style={{background:"rgba(110,160,201,0.1)",border:"1px solid #6ea0c944",borderRadius:"10px",padding:"0.7rem 0.8rem",display:"flex",alignItems:"center",gap:"0.6rem"}}><span>🔑</span><span style={{color:"#6ea0c9",fontSize:"0.78rem"}}><b>{pendingCheckin.length} check-in</b> nei prossimi 3 giorni</span></div>}
-              </div>
-            )}
-            {currentGuests.length>0&&(
-              <div style={{background:"rgba(110,201,154,0.06)",border:"1px solid #6ec99a33",borderRadius:"12px",padding:"0.9rem",marginBottom:"0.9rem"}}>
-                <h3 style={{margin:"0 0 0.6rem",fontFamily:"'Playfair Display',serif",color:"#6ec99a",fontSize:"0.9rem"}}>🏠 Ospiti presenti ({currentGuests.length})</h3>
-                {currentGuests.map(b=>(
-                  <div key={b.id} style={{display:"flex",alignItems:"center",gap:"0.7rem",padding:"0.5rem 0",borderBottom:"1px solid #1a2a1a"}}>
-                    <div style={{width:"7px",height:"7px",borderRadius:"50%",background:aptColor(b.apt),flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#e8d5b0",fontSize:"0.85rem",fontWeight:"500",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.guest}</div>
-                      <div style={{color:"#6a5a40",fontSize:"0.7rem"}}>{aptLabel(b.apt)} · fino al {formatDate(b.checkout)}</div>
-                    </div>
-                    <span style={{background:"#1a2a1a",color:"#6ec99a",fontSize:"0.62rem",padding:"0.1rem 0.45rem",borderRadius:"10px",border:"1px solid #6ec99a33",flexShrink:0}}>✓ Entrato</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem",marginBottom:"0.9rem"}}>
-              <h3 style={{margin:"0 0 0.7rem",fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.9rem"}}>Prossimi Arrivi</h3>
-              {upcoming.length===0?<p style={{color:"#5a4a30",fontSize:"0.8rem",margin:0}}>Nessun arrivo imminente</p>:upcoming.map(b=>(
-                <div key={b.id} style={{display:"flex",alignItems:"center",gap:"0.7rem",padding:"0.5rem 0",borderBottom:"1px solid #1e1a12"}}>
-                  <div style={{width:"7px",height:"7px",borderRadius:"50%",background:aptColor(b.apt),flexShrink:0}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#e8d5b0",fontSize:"0.85rem",fontWeight:"500",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.guest}</div>
-                    <div style={{color:"#6a5a40",fontSize:"0.7rem"}}>{aptLabel(b.apt)} · {b.platform}</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{color:"#c9a96e",fontSize:"0.8rem"}}>{formatDate(b.checkin)}</div>
-                    <div style={{color:"#5a4a30",fontSize:"0.65rem"}}>{nightCount(b.checkin,b.checkout)}n · €{b.price}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem"}}>
-              <h3 style={{margin:"0 0 0.7rem",fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"0.9rem"}}>Entrate vs Spese {calYear}</h3>
-              <div style={{display:"flex",alignItems:"flex-end",gap:"3px",height:"80px"}}>
-                {byMonth.map((d,i)=>(
-                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
-                    <div style={{width:"100%",display:"flex",gap:"1px",alignItems:"flex-end",height:"68px"}}>
-                      <div style={{flex:1,background:"#6ec99a",borderRadius:"2px 2px 0 0",height:`${(d.rev/maxBar)*100}%`,minHeight:d.rev?"2px":"0",opacity:0.85}}/>
-                      <div style={{flex:1,background:"#c96e6e",borderRadius:"2px 2px 0 0",height:`${(d.exp/maxBar)*100}%`,minHeight:d.exp?"2px":"0",opacity:0.85}}/>
-                    </div>
-                    <div style={{fontSize:"0.52rem",color:"#4a3a20",marginTop:"2px"}}>{d.month}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:"0.9rem",marginTop:"0.45rem"}}>
-                <span style={{fontSize:"0.68rem",color:"#6ec99a"}}>■ Entrate</span>
-                <span style={{fontSize:"0.68rem",color:"#c96e6e"}}>■ Spese</span>
-              </div>
-            </div>
-          </div>
+          <DashboardSection
+            activeFilter={activeFilter}
+            aptLabel={aptLabel}
+            aptColor={aptColor}
+            totalRevenue={totalRevenue}
+            totalExpAmt={totalExpAmt}
+            netProfit={netProfit}
+            bookingCount={filteredBookings.length}
+            pendingDeposits={pendingDeposits}
+            currentGuests={currentGuests}
+            upcoming={upcoming}
+            pendingCleaning={pendingCleaning}
+            pendingCheckin={pendingCheckin}
+            byMonth={byMonth}
+            maxBar={maxBar}
+            calYear={calYear}
+            onToggleDeposit={onToggleDeposit}
+          />
         )}
 
         {/* PRENOTAZIONI */}
@@ -218,138 +155,22 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
         )}
 
         {/* CALENDARIO */}
-        {section==="calendar"&&(()=>{
-          const mStr=`${calYear}-${String(calMonth+1).padStart(2,"0")}`;
-          const monthBs=filtered(bookings).filter(b=>b.checkin<`${mStr}-32`&&b.checkout>`${mStr}-00`).sort((a,b)=>a.checkin>b.checkin?1:-1);
-          const calDays=Array.from({length:daysInMonth},(_,i)=>i+1);
-          const btnV=(v)=>({background:calView===v?"#2a2010":"#120f0a",border:`1px solid ${calView===v?"#c9a96e55":"#2a2010"}`,borderRadius:"20px",padding:"0.28rem 0.75rem",color:calView===v?"#c9a96e":"#5a4a30",fontSize:"0.68rem",cursor:"pointer",fontFamily:"'Playfair Display',serif"});
-          return(
-            <div>
-              {/* Navigazione mese */}
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"0.7rem"}}>
-                <button onClick={prevMonth} style={{background:"#1a1612",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.45rem 1rem",color:"#c9a96e",cursor:"pointer",fontSize:"1.1rem",lineHeight:1,fontWeight:"bold"}}>‹</button>
-                <h2 style={{fontFamily:"'Playfair Display',serif",color:"#c9a96e",fontSize:"1.15rem",margin:0}}>{MONTHS_LONG[calMonth]} {calYear}</h2>
-                <button onClick={nextMonth} style={{background:"#1a1612",border:"1px solid #3a3020",borderRadius:"10px",padding:"0.45rem 1rem",color:"#c9a96e",cursor:"pointer",fontSize:"1.1rem",lineHeight:1,fontWeight:"bold"}}>›</button>
-              </div>
-              {/* Toggle vista */}
-              <div style={{display:"flex",gap:"0.35rem",marginBottom:"0.8rem"}}>
-                <button onClick={()=>setCalView("grid")} style={btnV("grid")}>📅 Mensile</button>
-                <button onClick={()=>setCalView("gantt")} style={btnV("gantt")}>📊 Per appartamento</button>
-              </div>
-
-              {/* ── VISTA GRIGLIA ── */}
-              {calView==="grid"&&(
-                <>
-                  <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"14px",padding:"0.7rem"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"2px",marginBottom:"3px"}}>
-                      {["L","M","M","G","V","S","D"].map((d,i)=>(
-                        <div key={i} style={{textAlign:"center",color:i===6?"#5a4832":"#4a3a20",fontSize:"0.65rem",padding:"0.2rem 0",fontWeight:"700"}}>{d}</div>
-                      ))}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"2px"}}>
-                      {Array.from({length:firstDay}).map((_,i)=><div key={"e"+i} style={{minHeight:"50px"}}/>)}
-                      {calDays.map(day=>{
-                        const dateStr=`${mStr}-${String(day).padStart(2,"0")}`;
-                        const bs=getBookingsForDay(day);
-                        const isToday=dateStr===today;
-                        const isSun=((firstDay+day-1)%7)===6;
-                        return(
-                          <div key={day} onClick={()=>openDayPopup(day)} style={{background:isToday?"#231d0f":"#0d0a07",border:`1px solid ${isToday?"#c9a96e55":"#181410"}`,borderRadius:"7px",padding:"0.28rem 0.2rem",minHeight:"50px",cursor:"pointer"}}>
-                            <div style={{fontSize:"0.7rem",fontWeight:isToday?"700":"400",color:isToday?"#c9a96e":isSun?"#4e3d28":"#4a3a20",textAlign:"center",marginBottom:"3px"}}>{day}</div>
-                            {bs.slice(0,2).map(b=>(
-                              <div key={b.id} style={{background:aptColor(b.apt),borderRadius:getDayRole(b,day)==="checkin"?"3px 0 0 3px":getDayRole(b,day)==="checkout"?"0 3px 3px 0":"0",height:"5px",marginBottom:"2px",width:"100%",opacity:0.9}}/>
-                            ))}
-                            {bs.length>2&&<div style={{fontSize:"0.5rem",color:"#c9a96e",textAlign:"center"}}>+{bs.length-2}</div>}
-                            {bs.length===1&&<div style={{fontSize:"0.55rem",color:aptColor(bs[0].apt),textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"0 1px",marginTop:"1px"}}>{bs[0].guest.split(" ")[0]}</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:"1.2rem",marginTop:"0.7rem",flexWrap:"wrap"}}>
-                    {realApts.map(a=>(
-                      <span key={a.id} style={{fontSize:"0.72rem",color:a.color,display:"flex",alignItems:"center",gap:"0.35rem"}}>
-                        <span style={{width:"14px",height:"5px",borderRadius:"2px",background:a.color,display:"inline-block"}}/>{a.label}
-                      </span>
-                    ))}
-                    <span style={{fontSize:"0.65rem",color:"#4a3a20",marginLeft:"auto"}}>Tocca per dettagli</span>
-                  </div>
-                </>
-              )}
-
-              {/* ── VISTA GANTT ── */}
-              {calView==="gantt"&&(
-                <div style={{background:"#120f0a",border:"1px solid #2a2010",borderRadius:"14px",padding:"0.7rem",overflowX:"auto"}}>
-                  <div style={{minWidth:`${90+daysInMonth*22}px`}}>
-                    {/* Header giorni */}
-                    <div style={{display:"flex",marginBottom:"4px"}}>
-                      <div style={{width:"90px",flexShrink:0}}/>
-                      <div style={{flex:1,display:"flex",gap:"1px"}}>
-                        {calDays.map(d=>{
-                          const dateStr=`${mStr}-${String(d).padStart(2,"0")}`;
-                          const isToday=dateStr===today;
-                          const wd=new Date(dateStr+"T12:00:00Z").getUTCDay();
-                          return(
-                            <div key={d} style={{flex:1,minWidth:"20px",textAlign:"center",fontSize:"0.52rem",fontWeight:isToday?"700":"400",color:isToday?"#c9a96e":wd===0||wd===6?"#5a4a30":"#3a2a18"}}>
-                              {d}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {/* Righe appartamenti */}
-                    {realApts.map(apt=>{
-                      const aptBs=monthBs.filter(b=>b.apt===apt.id);
-                      return(
-                        <div key={apt.id} style={{display:"flex",alignItems:"center",marginBottom:"5px"}}>
-                          <div style={{width:"90px",flexShrink:0,fontSize:"0.68rem",color:aptColor(apt.id),fontWeight:"700",paddingRight:"6px",textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{apt.label}</div>
-                          <div style={{flex:1,display:"flex",gap:"1px",height:"32px"}}>
-                            {calDays.map(d=>{
-                              const dateStr=`${mStr}-${String(d).padStart(2,"0")}`;
-                              const nextDateStr=`${mStr}-${String(d+1).padStart(2,"0")}`;
-                              const isToday=dateStr===today;
-                              const bk=aptBs.find(b=>b.checkin<=dateStr&&b.checkout>dateStr);
-                              const isFirst=bk&&(bk.checkin===dateStr||(d===1&&bk.checkin<dateStr));
-                              const isLast=bk&&(bk.checkout===nextDateStr||d===daysInMonth||bk.checkout<nextDateStr);
-                              const bg=bk?aptColor(bk.apt)+"bb":(isToday?"#1a1608":"#0a0806");
-                              const br=isFirst&&isLast?"4px":isFirst?"4px 0 0 4px":isLast?"0 4px 4px 0":"0";
-                              return(
-                                <div key={d} style={{flex:1,minWidth:"20px",height:"100%",background:bg,borderRadius:br,border:`1px solid ${bk?"transparent":isToday?"#2a2010":"#181410"}`,display:"flex",alignItems:"center",overflow:"hidden",position:"relative"}}>
-                                  {isToday&&!bk&&<div style={{position:"absolute",bottom:"2px",left:"50%",transform:"translateX(-50%)",width:"3px",height:"3px",borderRadius:"50%",background:"#c9a96e"}}/>}
-                                  {isFirst&&bk&&<span style={{fontSize:"0.48rem",color:"#0a0806",fontWeight:"700",whiteSpace:"nowrap",paddingLeft:"3px",overflow:"hidden"}}>{bk.guest.split(" ")[0]}</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {realApts.length===0&&<p style={{color:"#5a4a30",fontSize:"0.8rem",textAlign:"center",padding:"1rem 0"}}>Nessun appartamento configurato.</p>}
-                  </div>
-                </div>
-              )}
-
-              {/* Lista prenotazioni del mese (entrambe le viste) */}
-              {monthBs.length>0&&(
-                <div style={{marginTop:"0.9rem"}}>
-                  <h3 style={{fontFamily:"'Playfair Display',serif",color:"#8a7a60",fontSize:"0.88rem",marginBottom:"0.55rem"}}>Prenotazioni del mese</h3>
-                  {monthBs.map(b=>(
-                    <div key={b.id} style={{display:"flex",alignItems:"center",gap:"0.6rem",padding:"0.55rem 0.7rem",background:"#120f0a",borderRadius:"10px",marginBottom:"0.35rem",borderLeft:`3px solid ${aptColor(b.apt)}`}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:"#e8d5b0",fontSize:"0.83rem",fontWeight:"500",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.guest}</div>
-                        <div style={{color:"#6a5a40",fontSize:"0.68rem"}}>{formatDate(b.checkin)} → {formatDate(b.checkout)} · {aptLabel(b.apt)}</div>
-                      </div>
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{color:"#c9a96e",fontSize:"0.83rem"}}>€{b.price}</div>
-                        <div style={{color:b.depositPaid?"#6ec99a":"#c9a96e",fontSize:"0.62rem"}}>{b.depositPaid?"✓":"○"} €{b.deposit||0}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {section==="calendar"&&(
+          <CalendarSection
+            calYear={calYear}
+            calMonth={calMonth}
+            calView={calView}
+            prevMonth={prevMonth}
+            nextMonth={nextMonth}
+            setCalView={setCalView}
+            filteredBookings={filteredBookings}
+            realApts={realApts}
+            aptColor={aptColor}
+            aptLabel={aptLabel}
+            today={today}
+            openDayPopup={openDayPopup}
+          />
+        )}
 
         {/* FINANZE */}
         {section==="finances"&&(
@@ -466,7 +287,6 @@ export default function App() {
       apartments={apartments} onAddApartment={addApartment} onUpdateApartment={updateApartment} onDeleteApartment={deleteApartment}
       categories={categories}
       inbox={inbox} decisions={decisions} aptRules={aptRules} agentLoading={agentLoading} updateInboxStatus={updateInboxStatus} markThreadReplied={markThreadReplied} markDecisionSent={markDecisionSent} approveDecision={approveDecision}
-
     />
   );
 }
