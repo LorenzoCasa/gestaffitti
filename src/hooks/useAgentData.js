@@ -93,6 +93,20 @@ export default function useAgentData(user) {
       ));
   };
 
+  // Marks the decision as sent (owner clicked "Segna gestito" after copying the reply).
+  const markDecisionSent = async (id) => {
+    if (!id) return;
+    const sent_at = new Date().toISOString();
+    const { error } = await supabase
+      .from("agent_decisions")
+      .update({ sent_at, outcome: "replied", outcome_updated_at: sent_at })
+      .eq("id", id);
+    if (!error)
+      setDecisions(prev => prev.map(d =>
+        d.id === id ? { ...d, sent_at, outcome: "replied", outcome_updated_at: sent_at } : d
+      ));
+  };
+
   // ── agent_apt_rules ──────────────────────────────────────────────────────────
 
   const upsertAptRule = async (aptId, source, ruleFields) => {
@@ -133,6 +147,7 @@ export default function useAgentData(user) {
     addInboxMessage,
     updateInboxStatus,
     markThreadReplied,
+    markDecisionSent,
     addDecision,
     approveDecision,
     upsertAptRule,

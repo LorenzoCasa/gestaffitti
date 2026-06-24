@@ -269,7 +269,7 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
 
         {isActive && (
           <button
-            onClick={() => onMarkDone(allIds)}
+            onClick={() => onMarkDone(allIds, agentDecision?.id ?? null)}
             style={{ ...btnPrimary, background: "#0a1a0a", color: "#6ec99a", border: "1px solid #6ec99a33", marginLeft: "auto" }}>
             ✓ {isThread ? "Segna trattativa gestita" : "Segna gestito"}
           </button>
@@ -321,7 +321,7 @@ function ConversationCard({ thread, apartments, bookings, aptRules, decisions, o
 
 // ── Sezione principale ────────────────────────────────────────────────────────
 
-export default function MessaggiSection({ apartments, bookings, inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied }) {
+export default function MessaggiSection({ apartments, bookings, inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied, markDecisionSent }) {
   const [tab, setTab] = useState("nuovi");
 
   const threads  = groupInboxByThread(inbox ?? []);
@@ -329,12 +329,15 @@ export default function MessaggiSection({ apartments, bookings, inbox, decisions
   const gestiti  = threads.filter(t => !t.hasNewMessages);
   const displayed = tab === "nuovi" ? nuovi : gestiti;
 
-  async function handleMarkDone(ids) {
+  async function handleMarkDone(ids, decisionId) {
     if (markThreadReplied) {
       await markThreadReplied(ids);
     } else {
       // fallback per backward compat
       for (const id of ids) await updateInboxStatus(id, "replied");
+    }
+    if (decisionId && markDecisionSent) {
+      await markDecisionSent(decisionId);
     }
   }
 
