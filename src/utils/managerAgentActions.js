@@ -91,6 +91,16 @@ export async function executeAction(plan, { onAddBooking, onUpdateBooking } = {}
       return { success: true, message: `Prenotazione di ${payload.booking.guest} cancellata.` };
     }
 
+    case "move_booking": {
+      if (!onUpdateBooking) return { success: false, message: "onUpdateBooking non disponibile." };
+      const updated = { ...payload.booking, checkin: payload.newCheckin, checkout: payload.newCheckout };
+      const result = await onUpdateBooking(payload.booking.id, updated);
+      if (result?.ok === false) {
+        return { success: false, message: `Errore: ${result.error?.message ?? "sconosciuto"}` };
+      }
+      return { success: true, message: `Prenotazione di ${payload.booking.guest} spostata a ${payload.newCheckin}–${payload.newCheckout}.` };
+    }
+
     default:
       return { success: false, message: `Tipo azione non gestito: ${type}` };
   }
