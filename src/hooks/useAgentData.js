@@ -81,15 +81,35 @@ export default function useAgentData(user) {
     return data;
   };
 
-  const approveDecision = async (id, ownerNotes = null) => {
+  // Approves a decision: sets approved_at, stores the final response text
+  // and whether the owner modified it before sending.
+  // All three fields exist in DB (sprint_a1 + sprint_b1_learning_fields).
+  const approveDecision = async (id, { ownerNotes = null, finalText = null, wasModified = false } = {}) => {
     const approved_at = new Date().toISOString();
+    const updates = { approved_at, was_modified: wasModified };
+    if (ownerNotes !== null) updates.owner_notes = ownerNotes;
+    if (finalText  !== null) updates.response_text = finalText;
     const { error } = await supabase
       .from("agent_decisions")
-      .update({ approved_at, owner_notes: ownerNotes })
+      .update(updates)
       .eq("id", id);
     if (!error)
       setDecisions(prev => prev.map(d =>
-        d.id === id ? { ...d, approved_at, owner_notes: ownerNotes } : d
+        d.id === id ? { ...d, ...updates } : d
+      ));
+  };
+
+  // Marks the decision as sent (owner clicked "Segna gestito" after copying the reply).
+  const markDecisionSent = async (id) => {
+    if (!id) return;
+    const sent_at = new Date().toISOString();
+    const { error } = await supabase
+      .from("agent_decisions")
+      .update({ sent_at, outcome: "replied", outcome_updated_at: sent_at })
+      .eq("id", id);
+    if (!error)
+      setDecisions(prev => prev.map(d =>
+        d.id === id ? { ...d, sent_at, outcome: "replied", outcome_updated_at: sent_at } : d
       ));
   };
 
@@ -133,6 +153,7 @@ export default function useAgentData(user) {
     addInboxMessage,
     updateInboxStatus,
     markThreadReplied,
+    markDecisionSent,
     addDecision,
     approveDecision,
     upsertAptRule,
