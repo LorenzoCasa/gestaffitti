@@ -54,7 +54,7 @@ export function buildManagerAgentLLMContext({
 
   // Recent inbox: most recent first, max 15
   const recentInbox = [...inbox]
-    .sort((a, b) => (b.created_at ?? "") > (a.created_at ?? "") ? -1 : 1)
+    .sort((a, b) => (b.created_at ?? "") > (a.created_at ?? "") ? 1 : -1)
     .slice(0, 15)
     .map((item) => {
       const dec = decisionIndex[item.id] ?? null;
