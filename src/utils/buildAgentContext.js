@@ -3,6 +3,7 @@ import { checkAvailability }       from './agentAvailability.js';
 import { checkStayRules }          from './agentStayRules.js';
 import { getSubitoSeasonalPrice }  from './agentSeasonalRates.js';
 import { findAlternatives, findWindowsInMonth } from './agentAlternatives.js';
+import { DEFAULT_HOST_CONFIG }     from '../config/hostConfig.js';
 
 function inferYearForMonth(month) {
   const now = new Date();
@@ -86,6 +87,7 @@ export function buildAgentContext({
   aptRules    = [],
   decisions   = [],
   inbox       = [],
+  hostConfig  = DEFAULT_HOST_CONFIG,
 } = {}) {
   const realApts = apartments.filter(a => a.id !== 'all');
 
@@ -131,7 +133,7 @@ export function buildAgentContext({
       year:      inferYearForMonth(requestedMonth),
       position:  requestedWeekPosition,
       maxTotal:  3,
-    });
+    }, hostConfig);
   }
 
   const inquiry = {
@@ -223,12 +225,12 @@ export function buildAgentContext({
         bookings,
         year:     fmYear,
         maxTotal: 4,
-      });
+      }, hostConfig);
     }
   }
 
   // 5. Stay rules
-  const sr = checkStayRules(checkin, checkout, { isFullMonth, fullMonthNum });
+  const sr = checkStayRules(checkin, checkout, { isFullMonth, fullMonthNum }, hostConfig);
   const stayRules = {
     valid:                sr.valid,
     needsRules:           sr.needsRules,
@@ -239,7 +241,7 @@ export function buildAgentContext({
   };
 
   // 6. Seasonal pricing
-  const sp = getSubitoSeasonalPrice({ checkin, checkout, isFullMonth, fullMonthNum });
+  const sp = getSubitoSeasonalPrice({ checkin, checkout, isFullMonth, fullMonthNum }, hostConfig);
   const pricing = {
     totalPrice:  sp.totalPrice,
     weeklyRate:  sp.weeklyRate,
@@ -257,7 +259,7 @@ export function buildAgentContext({
     isFullMonth,
     apartments: realApts,
     bookings,
-  });
+  }, hostConfig);
   const alternatives = { items: altList, count: altList.length };
 
   // 8. Message history from inbox (same apartment)

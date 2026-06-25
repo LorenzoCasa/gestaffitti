@@ -72,13 +72,13 @@ function detectApartment(text, apartments = [], hostConfig = DEFAULT_HOST_CONFIG
   const l = text.toLowerCase();
   // Natural language alias patterns from hostConfig (e.g. "sull'uno" → apt1)
   for (const apt of hostConfig.apartments) {
-    if (apt.naturalAliasPattern && apt.naturalAliasPattern.test(l)) return apt.id;
+    if (apt.naturalAliasPattern instanceof RegExp && apt.naturalAliasPattern.test(l)) return apt.id;
   }
-  // Generic numeric abbreviations (appart. N, apt N) — position-based
-  for (let i = 0; i < hostConfig.apartments.length; i++) {
-    const idx = i + 1;
-    if (new RegExp(`appart\\.?\\s*${idx}\\b|apt\\s*${idx}\\b`, "i").test(l)) {
-      return hostConfig.apartments[i].id;
+  // Explicit numeric aliases from hostConfig (e.g. "apt 1" → apt1) — never position-based
+  for (const apt of hostConfig.apartments) {
+    if (apt.numericAlias != null) {
+      const n = apt.numericAlias;
+      if (new RegExp(`appart\\.?\\s*${n}\\b|apt\\s*${n}\\b`, "i").test(l)) return apt.id;
     }
   }
   // Fallback: match by id or label from runtime apartments array

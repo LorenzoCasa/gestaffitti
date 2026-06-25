@@ -17,6 +17,7 @@ import { checkStayRules }          from "./agentStayRules.js";
 import { getRentalPricingRules, draftSubitoPromotion, analyzeFreeSlots } from "./rentalBusinessBrain.js";
 import { resolveListingFromTitle, extractListingTitle } from "./agentListingResolver.js";
 import { interpretMessage }        from "./managerAgentBrain.js";
+import { buildAgentContext }        from "./buildAgentContext.js";
 
 let passed = 0;
 let failed = 0;
@@ -203,6 +204,84 @@ assert("identity.city = Senigallia",  DEFAULT_HOST_CONFIG.identity.city, "Seniga
 assert("identity.region = Marche",    DEFAULT_HOST_CONFIG.identity.region, "Marche");
 assertTruthy("locationLine include Senigallia",
   DEFAULT_HOST_CONFIG.identity.locationLine.includes("Senigallia"));
+
+console.log("\n── H11: Fix — instanceof RegExp guard + numericAlias esplicito ─────");
+
+// H11-A: nessun TypeError se naturalAliasPattern non è RegExp (config da JSON)
+const fakeConfigBadPattern = {
+  ...DEFAULT_HOST_CONFIG,
+  apartments: [
+    { id: "apt1", label: "A", subitoTitle: "", naturalAliasPattern: {}, numericAlias: 1 },
+  ],
+};
+let noThrow = true;
+try {
+  interpretMessage("sull'uno crea prenotazione", {
+    apartments: [{ id: "apt1", label: "A" }],
+    bookings: [], inbox: [], decisions: [],
+    hostConfig: fakeConfigBadPattern,
+  });
+} catch (e) {
+  noThrow = false;
+}
+assertTruthy("H11-A: nessun TypeError con naturalAliasPattern non-RegExp", noThrow);
+
+// H11-B: numericAlias esplicito — "apt 1" risolve ad apt1 (non posizionale)
+// Ospite già presente nei bookings (apt2) + testo specifica "apt 1" → finalAptId deve essere apt1
+const booksH11b = [
+  { id: "bx1", guest: "Mario Verdi", apt: "apt2", checkin: "2026-08-01", checkout: "2026-08-08", status: "confirmed" },
+];
+const r11b = interpretMessage("crea prenotazione Mario Verdi apt 1 dal 5/7 al 12/7 prezzo 800", {
+  apartments: [
+    { id: "apt1", label: "Appartamento A" },
+    { id: "apt2", label: "Appartamento B" },
+    { id: "all", label: "Tutti" },
+  ],
+  bookings: booksH11b, inbox: [], decisions: [],
+});
+assertTruthy("H11-B: apt 1 → apt1 via numericAlias → needs_confirmation", r11b.needs_confirmation === true);
+assert("H11-B extra: action_plan.payload.aptId = apt1 (non apt2 del booking)",
+  r11b.action_plan?.payload?.aptId, "apt1");
+
+// H11-C: config con apt5 (numericAlias=5) — "apt 1" non deve mappare silenziosamente a apt5
+const fakeConfigApt5 = {
+  ...DEFAULT_HOST_CONFIG,
+  apartments: [
+    { id: "apt5", label: "Appartamento X", subitoTitle: "", naturalAliasPattern: /apt-x/i, numericAlias: 5 },
+  ],
+};
+const r11c = interpretMessage("crea prenotazione apt 1", {
+  apartments: [{ id: "apt5", label: "Appartamento X" }],
+  bookings: [], inbox: [], decisions: [],
+  hostConfig: fakeConfigApt5,
+});
+const aptResolved11c = r11c.action_plan?.payload?.aptId ?? null;
+assert("H11-C: apt 1 non risolve a apt5 con config non-sequenziale (no silent fallback)",
+  aptResolved11c !== "apt5", true);
+
+console.log("\n── H12: Fix — buildAgentContext riceve e usa hostConfig ─────────");
+
+const customRatesConfig = {
+  ...DEFAULT_HOST_CONFIG,
+  seasonalRates: {
+    ...DEFAULT_HOST_CONFIG.seasonalRates,
+    8: { month: "agosto", weekly: 1200, monthly: 4000, season: "peak" },
+  },
+};
+const ctx12 = buildAgentContext({
+  formData: { aptId: "apt1", checkin: "2026-08-01", checkout: "2026-08-08", guests: 2, source: "subito" },
+  apartments: [{ id: "apt1", label: "Appartamento A" }],
+  bookings: [], aptRules: [],
+  hostConfig: customRatesConfig,
+});
+assert("H12-A: buildAgentContext usa hostConfig custom per pricing agosto (€1200)", ctx12.pricing.totalPrice, 1200);
+
+const ctx12b = buildAgentContext({
+  formData: { aptId: "apt1", checkin: "2026-08-01", checkout: "2026-08-08", guests: 2, source: "subito" },
+  apartments: [{ id: "apt1", label: "Appartamento A" }],
+  bookings: [], aptRules: [],
+});
+assert("H12-B: buildAgentContext senza hostConfig usa default (€800)", ctx12b.pricing.totalPrice, 800);
 
 console.log("\n────────────────────────────────────────────────────────────────────");
 console.log(`Totale: ${passed + failed} test — ✓ ${passed} passati, ${failed > 0 ? "✗ " + failed + " falliti" : "0 falliti"}`);

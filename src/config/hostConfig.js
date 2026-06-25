@@ -34,12 +34,14 @@ export const DEFAULT_HOST_CONFIG = {
       label:               "Appartamento A",
       subitoTitle:         "lungomare senigallia appartamento estivo 1",
       naturalAliasPattern: /sull['']?uno\b|nell['']?uno\b|\bl['']?uno\b/i,
+      numericAlias:        1,
     },
     {
       id:                  "apt2",
       label:               "Appartamento B",
       subitoTitle:         "lungomare senigallia appartamento estivo 2",
       naturalAliasPattern: /sull['']?due\b|nell['']?due\b|\bl['']?due\b/i,
+      numericAlias:        2,
     },
   ],
 
