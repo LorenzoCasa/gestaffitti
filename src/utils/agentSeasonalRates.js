@@ -1,9 +1,4 @@
-const RATES = {
-  6: { weekly: 500, monthly: 1600 },
-  7: { weekly: 800, monthly: 2600 },
-  8: { weekly: 800, monthly: 2600 },
-  9: { weekly: 500, monthly: 1500 },
-};
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
 
 function nightsBetween(checkin, checkout) {
   const a = new Date(checkin + "T00:00:00Z");
@@ -15,7 +10,12 @@ function monthOf(isoDate) {
   return parseInt(isoDate.slice(5, 7), 10);
 }
 
-export function getSubitoSeasonalPrice({ checkin, checkout, isFullMonth = false, fullMonthNum = null }) {
+export function getSubitoSeasonalPrice(
+  { checkin, checkout, isFullMonth = false, fullMonthNum = null },
+  hostConfig = DEFAULT_HOST_CONFIG,
+) {
+  const RATES = hostConfig.seasonalRates;
+
   if (isFullMonth && fullMonthNum) {
     const rates = RATES[fullMonthNum];
 

@@ -1,9 +1,6 @@
 import { checkAvailability } from './agentAvailability.js';
 import { getSubitoSeasonalPrice } from './agentSeasonalRates.js';
-
-const PEAK_MONTHS  = new Set([6, 7, 8]);
-const VALID_NIGHTS = [7, 14, 21];
-const MAX_OFFSET   = 15; // days — RENTAL_AGENT_RULES: ±15 giorni max
+import { DEFAULT_HOST_CONFIG } from '../config/hostConfig.js';
 
 function weekdayUTC(iso) {
   return new Date(iso + 'T12:00:00Z').getUTCDay();
@@ -41,7 +38,7 @@ function prevSatOnOrBefore(iso) {
 }
 
 // Saturday-to-Saturday candidate windows near requestedCheckin, sorted by proximity
-function satCandidates(requestedCheckin, reqNights) {
+function satCandidates(requestedCheckin, reqNights, maxOffset, validNights) {
   const anchors = [
     nextSatOnOrAfter(requestedCheckin),
     prevSatOnOrBefore(requestedCheckin),
@@ -52,8 +49,8 @@ function satCandidates(requestedCheckin, reqNights) {
   const all  = [];
   for (const anchor of anchors) {
     const offset = Math.abs(nts(anchor, requestedCheckin));
-    if (offset > MAX_OFFSET) continue;
-    const durations = [...VALID_NIGHTS].sort(
+    if (offset > maxOffset) continue;
+    const durations = [...validNights].sort(
       (a, b) => Math.abs(a - reqNights) - Math.abs(b - reqNights)
     );
     for (const n of durations) {
@@ -72,10 +69,10 @@ function satCandidates(requestedCheckin, reqNights) {
 }
 
 // Build one alternative — returns null if not available on calendar
-function makeAlt(aptId, aptLabel, checkin, checkout, nights, bookings) {
+function makeAlt(aptId, aptLabel, checkin, checkout, nights, bookings, hostConfig) {
   const avail = checkAvailability({ aptId, checkin, checkout }, bookings, { minNights: 7 });
   if (!avail.available) return null;
-  const pricing = getSubitoSeasonalPrice({ checkin, checkout, isFullMonth: false, fullMonthNum: null });
+  const pricing = getSubitoSeasonalPrice({ checkin, checkout, isFullMonth: false, fullMonthNum: null }, hostConfig);
   return {
     checkin, checkout, nights, aptId, aptLabel,
     pricing,
@@ -84,38 +81,19 @@ function makeAlt(aptId, aptLabel, checkin, checkout, nights, bookings) {
 }
 
 /**
- * Find up to maxTotal calendar-verified alternatives.
- *
- * Search order:
- * 1. Same apt — nearby sat-sat windows (before and after, within 30 days)
- * 2. Other apts — same requested period
- * 3. Other apts — nearby sat-sat windows
- *
- * Every alternative is verified via checkAvailability before being returned.
- *
- * @param {{
- *   aptId: string,
- *   requestedCheckin: string,
- *   requestedCheckout: string,
- *   isFullMonth?: boolean,
- *   apartments?: Array<{id:string, label:string}>,
- *   bookings?: Array,
- *   maxTotal?: number,
- * }} options
- * @returns {Array<{checkin, checkout, nights, aptId, aptLabel, pricing, label}>}
- */
-/**
  * Find available sat-sat windows of `nights` duration in a given month.
  * Used when the client says "due settimane di agosto" without specific dates.
  * Every window is calendar-verified before being returned.
  *
- * @param {{ aptId, aptLabel, month, nights, bookings, year, position?, maxTotal? }}
+ * @param {{ aptId, aptLabel, month, nights, bookings, year, position?, maxTotal? }} options
+ * @param {object} hostConfig
  * @returns {Array}
  */
 export function findWindowsInMonth({
   aptId, aptLabel, month, nights, bookings = [], year, position = null, maxTotal = 3,
-}) {
-  if (!aptId || !month || !VALID_NIGHTS.includes(nights)) return [];
+}, hostConfig = DEFAULT_HOST_CONFIG) {
+  const { validNights } = hostConfig.stayRules;
+  if (!aptId || !month || !validNights.includes(nights)) return [];
 
   const monthStr   = String(month).padStart(2, '0');
   const monthStart = `${year}-${monthStr}-01`;
@@ -134,23 +112,33 @@ export function findWindowsInMonth({
   if (position === 'last' || position === 'last_two') {
     ordered = [...candidates].reverse();
   } else if (position === 'second') {
-    ordered = candidates.slice(1);   // skip first Saturday
+    ordered = candidates.slice(1);
   } else if (position === 'third') {
-    ordered = candidates.slice(2);   // skip first two
+    ordered = candidates.slice(2);
   } else {
-    ordered = candidates;            // first, first_two, or none → natural chronological
+    ordered = candidates;
   }
 
   const results = [];
   for (const sat of ordered) {
     if (results.length >= maxTotal) break;
     const checkout = addDays(sat, nights);
-    const alt = makeAlt(aptId, aptLabel, sat, checkout, nights, bookings);
+    const alt = makeAlt(aptId, aptLabel, sat, checkout, nights, bookings, hostConfig);
     if (alt) results.push(alt);
   }
   return results;
 }
 
+/**
+ * Find up to maxTotal calendar-verified alternatives.
+ *
+ * @param {{
+ *   aptId, requestedCheckin, requestedCheckout,
+ *   isFullMonth?, apartments?, bookings?, maxTotal?
+ * }} options
+ * @param {object} hostConfig
+ * @returns {Array}
+ */
 export function findAlternatives({
   aptId,
   requestedCheckin,
@@ -159,8 +147,11 @@ export function findAlternatives({
   apartments   = [],
   bookings     = [],
   maxTotal     = 3,
-}) {
+}, hostConfig = DEFAULT_HOST_CONFIG) {
   if (!aptId || !requestedCheckin || !requestedCheckout || isFullMonth) return [];
+
+  const { peakMonths, validNights, maxAlternativeOffsetDays } = hostConfig.stayRules;
+  const PEAK_MONTHS = new Set(peakMonths);
 
   const results   = [];
   const reqNights = nts(requestedCheckin, requestedCheckout);
@@ -172,8 +163,6 @@ export function findAlternatives({
   const isNonStandardDuration = reqNights % 7 !== 0;
 
   // 1. Other apts, same period — only for standard durations AND sat-sat aligned in peak months.
-  // For non-standard durations, or peak months with non-Saturday checkin, proposing the same
-  // dates on another apt is wrong: the stay would violate stay rules on both apartments.
   const checkinIsSat = weekdayUTC(requestedCheckin) === 6;
   if (!isNonStandardDuration && (!isPeak || checkinIsSat)) {
     for (const apt of otherApts) {
@@ -186,7 +175,7 @@ export function findAlternatives({
         const pricing = getSubitoSeasonalPrice({
           checkin: requestedCheckin, checkout: requestedCheckout,
           isFullMonth: false, fullMonthNum: null,
-        });
+        }, hostConfig);
         results.push({
           checkin: requestedCheckin, checkout: requestedCheckout,
           nights: reqNights, aptId: apt.id, aptLabel: apt.label,
@@ -199,23 +188,22 @@ export function findAlternatives({
   }
 
   // 2. Same apt, sat-sat windows (different dates, same apt)
-  // Also search for non-peak months when the requested duration is non-standard (not a multiple of 7)
   const searchNights = isNonStandardDuration ? 7 : reqNights;
   if ((isPeak || isNonStandardDuration) && results.length < maxTotal) {
-    for (const c of satCandidates(requestedCheckin, searchNights)) {
+    for (const c of satCandidates(requestedCheckin, searchNights, maxAlternativeOffsetDays, validNights)) {
       if (results.length >= maxTotal) break;
-      const alt = makeAlt(aptId, mainApt?.label ?? '', c.checkin, c.checkout, c.nights, bookings);
+      const alt = makeAlt(aptId, mainApt?.label ?? '', c.checkin, c.checkout, c.nights, bookings, hostConfig);
       if (alt) results.push(alt);
     }
   }
 
   // 3. Other apts, sat-sat windows
   if (isPeak && results.length < maxTotal) {
-    const cands = satCandidates(requestedCheckin, reqNights);
+    const cands = satCandidates(requestedCheckin, reqNights, maxAlternativeOffsetDays, validNights);
     for (const apt of otherApts) {
       for (const c of cands) {
         if (results.length >= maxTotal) break;
-        const alt = makeAlt(apt.id, apt.label, c.checkin, c.checkout, c.nights, bookings);
+        const alt = makeAlt(apt.id, apt.label, c.checkin, c.checkout, c.nights, bookings, hostConfig);
         if (alt) results.push(alt);
       }
       if (results.length >= maxTotal) break;

@@ -1,3 +1,5 @@
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
+
 /**
  * rentalBusinessBrain.js — GestAffitti Rental Business Brain v1
  *
@@ -47,24 +49,20 @@ const MONTH_NAMES = { 6: "giugno", 7: "luglio", 8: "agosto", 9: "settembre" };
 
 /**
  * Returns the canonical GestAffitti pricing rules.
- * Source of truth: CLAUDE.md section "Current Pricing Rules".
+ * Source of truth: hostConfig (which mirrors CLAUDE.md "Current Pricing Rules").
  */
-export function getRentalPricingRules() {
+export function getRentalPricingRules(hostConfig = DEFAULT_HOST_CONFIG) {
+  const { stayRules, seasonalRates } = hostConfig;
   return {
     source:   "gestaffitti_internal",
     currency: "EUR",
     stay_rules: {
       preferred_pattern:      "saturday_to_saturday",
-      valid_durations_nights: [7, 14, 21],
-      full_month_eligible:    true,
-      september_flexible:     true,
+      valid_durations_nights: stayRules.validNights,
+      full_month_eligible:    stayRules.fullMonthEligible,
+      september_flexible:     stayRules.septemberFlexible,
     },
-    seasonal_rates: {
-      6: { month: "giugno",    weekly: 500,  monthly: 1600, season: "shoulder" },
-      7: { month: "luglio",    weekly: 800,  monthly: 2600, season: "peak"     },
-      8: { month: "agosto",    weekly: 800,  monthly: 2600, season: "peak"     },
-      9: { month: "settembre", weekly: 500,  monthly: 1500, season: "shoulder" },
-    },
+    seasonal_rates: seasonalRates,
     non_standard_handling: {
       description: "Soggiorni non multipli di 7 notti: prezzo base da confermare",
       rule: "Usa tariffa settimanale del mese come base. Notti extra a tariffa giornaliera (weeklyRate/7). Proponi come 'Consiglio da confermare', non come dato ufficiale.",
@@ -328,10 +326,11 @@ export function analyzeRevenueOpportunities(freeSlots, pricingRules) {
  * @param {{ label?: string }|null} apartment
  * @returns {{ title, body, fullText, slot, priceLabel, seasonLabel, dateRange }|null}
  */
-export function draftSubitoPromotion(slot, pricingRules, apartment) {
+export function draftSubitoPromotion(slot, pricingRules, apartment, hostConfig = DEFAULT_HOST_CONFIG) {
   void pricingRules;
   if (!slot) return null;
 
+  const locationLine = hostConfig.identity.locationLine;
   const aptLabel   = apartment?.label ?? slot.aptLabel ?? "Appartamento";
   const weeksLabel = slot.weeks === 1 ? "1 settimana" : `${slot.weeks} settimane`;
   const priceLabel = slot.estimatedValue != null ? `€${slot.estimatedValue}` : "prezzo da confermare";
@@ -352,7 +351,7 @@ export function draftSubitoPromotion(slot, pricingRules, apartment) {
   const body = [
     `📅 Periodo: ${dateRange} (${slot.nights} notti / ${weeksLabel})`,
     `💶 Prezzo: ${priceLabel} — ${seasonLabel}`,
-    `📍 Lungomare Senigallia, Spiaggia di Velluto`,
+    `📍 ${locationLine}`,
     ``,
     `Appartamento ${aptLabel} disponibile per ${weeksLabel} in ${monthName}.`,
     `Ideale per famiglie. Posizione vicino mare, zona lungomare.`,

@@ -5,6 +5,7 @@ import { getSubitoSeasonalPrice }  from './agentSeasonalRates.js';
 import { findAlternatives }        from './agentAlternatives.js';
 import { buildSubitoResponse }     from './agentResponseBuilder.js';
 import { AGENT_PLATFORM_PROFILES } from '../constants.js';
+import { DEFAULT_HOST_CONFIG }     from '../config/hostConfig.js';
 
 // ── Engine rules ───────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function resolveAptRules(aptId, source, aptRules) {
  *   finalDecision,
  * }}
  */
-export function runRentalAgent({ rawText, rawMetadata, formData, apartments, bookings, aptRules }) {
+export function runRentalAgent({ rawText, rawMetadata, formData, apartments, bookings, aptRules, hostConfig = DEFAULT_HOST_CONFIG }) {
   // 1. Parse raw text
   const parsedFromRaw = parseAgentInquiry(rawText ?? '', rawMetadata ?? {});
 
@@ -113,7 +114,8 @@ export function runRentalAgent({ rawText, rawMetadata, formData, apartments, boo
   const stayRuleResult = checkStayRules(
     parsedForResponse.checkin,
     parsedForResponse.checkout,
-    { isFullMonth: parsedForResponse.isFullMonth, fullMonthNum: parsedForResponse.fullMonthNum }
+    { isFullMonth: parsedForResponse.isFullMonth, fullMonthNum: parsedForResponse.fullMonthNum },
+    hostConfig,
   );
 
   // 7. Seasonal pricing
@@ -122,14 +124,14 @@ export function runRentalAgent({ rawText, rawMetadata, formData, apartments, boo
     checkout:     parsedForResponse.checkout,
     isFullMonth:  parsedForResponse.isFullMonth,
     fullMonthNum: parsedForResponse.fullMonthNum,
-  });
+  }, hostConfig);
 
   // 8. Enrich sat-sat suggestions with pricing
   const enrichedStayRuleResult = {
     ...stayRuleResult,
     suggestedValidRanges: stayRuleResult.suggestedValidRanges.map(r => ({
       ...r,
-      pricing: getSubitoSeasonalPrice({ checkin: r.checkin, checkout: r.checkout, isFullMonth: false, fullMonthNum: null }),
+      pricing: getSubitoSeasonalPrice({ checkin: r.checkin, checkout: r.checkout, isFullMonth: false, fullMonthNum: null }, hostConfig),
     })),
   };
 
@@ -144,7 +146,7 @@ export function runRentalAgent({ rawText, rawMetadata, formData, apartments, boo
     isFullMonth:       parsedForResponse.isFullMonth,
     apartments,
     bookings,
-  });
+  }, hostConfig);
 
   // 11. Subito response (text + type)
   const apartmentLabel = apartments.find(a => a.id === normalizedFormData.aptId)?.label ?? '';
