@@ -81,9 +81,9 @@ function detectApartment(text, apartments = [], hostConfig = DEFAULT_HOST_CONFIG
       if (new RegExp(`appart\\.?\\s*${n}\\b|apt\\s*${n}\\b`, "i").test(l)) return apt.id;
     }
   }
-  // Fallback: match by id or label from runtime apartments array
+  // Fallback: match by id or label from runtime apartments array (id lowercased — text is already lowercase)
   for (const apt of apartments.filter(a => a.id !== "all")) {
-    if (new RegExp("\\b" + apt.id + "\\b").test(l)) return apt.id;
+    if (new RegExp("\\b" + apt.id.toLowerCase() + "\\b").test(l)) return apt.id;
     if (apt.label && l.includes(apt.label.toLowerCase())) return apt.id;
   }
   return null;
@@ -429,7 +429,7 @@ function buildInformativeReply(intent, entities, {snapshot, bookings, today}={})
 
 // ── Operative response builders ───────────────────────────────────────────────
 
-function buildOperativePlan(intent, entities, resolution, {bookings=[], apartments=[], today=""}={}) {
+function buildOperativePlan(intent, entities, resolution, {bookings=[], apartments=[], today="", hostConfig=DEFAULT_HOST_CONFIG}={}) {
   const {guestRef, aptId, dates, price, deposit, guests, relativeShift} = entities;
 
   if(intent==="confirm_request"||intent==="create_booking") {
@@ -444,7 +444,7 @@ function buildOperativePlan(intent, entities, resolution, {bookings=[], apartmen
 
     const missing=[];
     if(!finalGuest)   missing.push("nome ospite");
-    if(!finalAptId)   missing.push('appartamento ("apt1" o "apt2")');
+    if(!finalAptId) { const hint=(hostConfig?.apartments??[]).map(a=>'"'+a.id+'"').join(' o '); missing.push('appartamento ('+(hint||'"appartamento"')+')');}
     if(!finalCheckin) missing.push("data check-in");
     if(!finalCheckout)missing.push("data check-out");
     if(finalPrice==null) missing.push("prezzo");
@@ -572,7 +572,7 @@ export function interpretMessage(text, {
     return{reply:q, intent, confidence, needs_clarification:true, clarification_question:q, needs_confirmation:false, action_plan:null, options:[]};
   }
 
-  const plan = buildOperativePlan(intent, entities, resolution, {bookings, apartments, today});
+  const plan = buildOperativePlan(intent, entities, resolution, {bookings, apartments, today, hostConfig});
 
   if(plan.type==="clarification") {
     return{reply:plan.question, intent, confidence, needs_clarification:true, clarification_question:plan.question, needs_confirmation:false, action_plan:null, options:[]};

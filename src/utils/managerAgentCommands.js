@@ -6,6 +6,7 @@
  */
 
 import { checkAvailability } from "./agentAvailability.js";
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
 
 // ── Italian month lookup ──────────────────────────────────────────────────────
 
@@ -74,15 +75,21 @@ function extractDates(text) {
 
 // ── Apartment detection ───────────────────────────────────────────────────────
 
-function detectApartment(text, apartments) {
+function detectApartment(text, apartments, hostConfig = DEFAULT_HOST_CONFIG) {
   const lower = text.toLowerCase();
   const real = (apartments ?? []).filter(a => a.id !== "all");
+  // Match by id or label from runtime apartments array (id lowercased — text is already lowercase)
   for (const apt of real) {
-    if (new RegExp("\\b" + apt.id + "\\b").test(lower)) return apt.id;
+    if (new RegExp("\\b" + apt.id.toLowerCase() + "\\b").test(lower)) return apt.id;
     if (apt.label && lower.includes(apt.label.toLowerCase())) return apt.id;
   }
-  if (/(?:appart\w*|apt)\s*(?:a\b|1\b)/i.test(lower)) return "apt1";
-  if (/(?:appart\w*|apt)\s*(?:b\b|2\b)/i.test(lower)) return "apt2";
+  // Match by numericAlias from hostConfig — never position-based
+  for (const apt of (hostConfig?.apartments ?? [])) {
+    if (apt.numericAlias != null) {
+      const n = apt.numericAlias;
+      if (new RegExp(`appart\\.?\\s*${n}\\b|apt\\s*${n}\\b`, "i").test(lower)) return apt.id;
+    }
+  }
   return null;
 }
 
@@ -164,7 +171,7 @@ function findBookingByGuest(guestRef, bookings) {
  * @param {{ apartments?: Array }} opts
  * @returns {{ intent: string, rawParams: object }}
  */
-export function parseOwnerCommand(text, { apartments = [] } = {}) {
+export function parseOwnerCommand(text, { apartments = [], hostConfig = DEFAULT_HOST_CONFIG } = {}) {
   const intent = detectIntent(text);
   let rawParams = {};
 
@@ -172,7 +179,7 @@ export function parseOwnerCommand(text, { apartments = [] } = {}) {
     const { checkin, checkout } = extractDates(text);
     rawParams = {
       guest:   extractGuestForCreate(text),
-      aptId:   detectApartment(text, apartments),
+      aptId:   detectApartment(text, apartments, hostConfig),
       checkin,
       checkout,
       guests:  extractGuests(text),
@@ -197,7 +204,7 @@ export function parseOwnerCommand(text, { apartments = [] } = {}) {
  * @param {{ bookings?: Array, apartments?: Array, today?: string }} opts
  * @returns {{ valid: boolean, errors: string[], payload: object }}
  */
-export function validateCommand(parsed, { bookings = [], apartments = [], today = "" } = {}) {
+export function validateCommand(parsed, { bookings = [], apartments = [], today = "", hostConfig = DEFAULT_HOST_CONFIG } = {}) {
   const { intent, rawParams } = parsed;
 
   if (intent === "show_today_tasks") {
@@ -224,7 +231,7 @@ export function validateCommand(parsed, { bookings = [], apartments = [], today 
     const errors = [];
     const { guest, aptId, checkin, checkout, price } = rawParams;
     if (!guest)    errors.push("Nome ospite non trovato nel comando");
-    if (!aptId)    errors.push('Appartamento non riconosciuto — usa "apt1", "apt2", "Appartamento A/B"');
+    if (!aptId) { const hint=(apartments??[]).filter(a=>a.id!=="all").map(a=>'"'+a.id+'"').join(' o '); errors.push('Appartamento non riconosciuto — usa '+(hint||'"appartamento"')+' o il nome completo'); }
     if (!checkin)  errors.push("Data check-in non trovata");
     if (!checkout) errors.push("Data check-out non trovata");
     if (price == null) errors.push("Prezzo non trovato");
