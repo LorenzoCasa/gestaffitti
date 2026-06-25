@@ -31,7 +31,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { EDGE_SEASONAL_RATES, EDGE_PEAK_MONTHS, EDGE_VALID_NIGHTS, EDGE_SUBITO_TITLE_MAP, EDGE_HOST_IDENTITY } from "../_shared/hostConfig.ts";
+import { EDGE_SEASONAL_RATES, EDGE_PEAK_MONTHS, EDGE_VALID_NIGHTS, EDGE_SUBITO_TITLE_MAP } from "../_shared/hostConfig.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
