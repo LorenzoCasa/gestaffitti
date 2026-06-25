@@ -19,6 +19,8 @@
 //      --project-ref rkhxbjrfjwavwhehtavg
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { EDGE_HOST_IDENTITY } from "../_shared/hostConfig.ts";
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -818,10 +820,10 @@ function buildInlinePromoText(ctx: AgentContext): string | null {
   const body = [
     `📅 Periodo: ${dateRange} (${nights} notti / ${weeksLabel})`,
     `💶 Prezzo consigliato: ${priceLabel}`,
-    `📍 Lungomare Senigallia, Spiaggia di Velluto`,
+    `📍 ${EDGE_HOST_IDENTITY.locationLine}`,
     ``,
     `${aptLabel} disponibile per il periodo ${dateRange}.`,
-    `Ideale per famiglie o coppie. Posizione fronte mare sul lungomare di Senigallia.`,
+    `Ideale per famiglie o coppie. Posizione fronte mare sul lungomare di ${EDGE_HOST_IDENTITY.city}.`,
     ``,
     `📩 Contattami indicando numero di persone e periodo richiesto. Risposta rapida garantita.`,
   ].join("\n");

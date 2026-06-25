@@ -31,6 +31,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EDGE_SEASONAL_RATES, EDGE_PEAK_MONTHS, EDGE_VALID_NIGHTS, EDGE_SUBITO_TITLE_MAP, EDGE_HOST_IDENTITY } from "../_shared/hostConfig.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,10 +108,7 @@ function json(body: unknown, status = 200): Response {
 
 // ── agentListingResolver ──────────────────────────────────────────────────────
 
-const SUBITO_TITLE_MAP: Record<string, string> = {
-  "lungomare senigallia appartamento estivo 1": "apt1",
-  "lungomare senigallia appartamento estivo 2": "apt2",
-};
+const SUBITO_TITLE_MAP = EDGE_SUBITO_TITLE_MAP;
 
 const GENERIC_WORDS = new Set([
   "appartamento", "casa", "mare", "affitto", "stanza", "camera",
@@ -355,8 +353,8 @@ function checkAvailability(
 
 // ── agentStayRules ────────────────────────────────────────────────────────────
 
-const PEAK_MONTHS_SET = new Set([6, 7, 8]);
-const VALID_NIGHTS_LIST = [7, 14, 21];
+const PEAK_MONTHS_SET = new Set(EDGE_PEAK_MONTHS);
+const VALID_NIGHTS_LIST = EDGE_VALID_NIGHTS;
 
 function weekdayUTC(isoDate: string): number {
   return new Date(isoDate + "T12:00:00Z").getUTCDay();
@@ -404,12 +402,7 @@ function checkStayRules(
 
 // ── agentSeasonalRates ────────────────────────────────────────────────────────
 
-const SEASONAL_RATES: Record<number, { weekly: number; monthly: number }> = {
-  6: { weekly: 500, monthly: 1600 },
-  7: { weekly: 800, monthly: 2600 },
-  8: { weekly: 800, monthly: 2600 },
-  9: { weekly: 500, monthly: 1500 },
-};
+const SEASONAL_RATES = EDGE_SEASONAL_RATES;
 
 function getSubitoSeasonalPrice(opts: {
   checkin: string | null;
@@ -596,7 +589,7 @@ function buildAgentContext(opts: {
     ...(!guests ? ["guests"] : []),
   ];
 
-  const VALID_NIGHTS_SET = new Set([7, 14, 21]);
+  const VALID_NIGHTS_SET = new Set(EDGE_VALID_NIGHTS);
   let monthWindows = null;
   if (!isFullMonth && !checkin && !checkout && parsed.requestedMonth && parsed.requestedNights && VALID_NIGHTS_SET.has(parsed.requestedNights)) {
     const apt = apartments.find((a) => a.id === aptId);
