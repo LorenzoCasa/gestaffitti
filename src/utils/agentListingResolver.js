@@ -1,10 +1,4 @@
-// Mapping esplicito: titolo annuncio Subito (lowercase) → aptId nel DB.
-// Priorità massima — sovrascrive qualsiasi word-matching.
-// Aggiungere qui nuovi annunci senza toccare il database.
-const SUBITO_TITLE_MAP = {
-  "lungomare senigallia appartamento estivo 1": "apt1",
-  "lungomare senigallia appartamento estivo 2": "apt2",
-};
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
 
 // Parole troppo generiche per identificare un appartamento
 const GENERIC = new Set([
@@ -45,16 +39,24 @@ export function extractListingTitle(rawMetadata) {
  * @param {string|null} listingTitle
  * @param {Array<{id:string, label:string}>} apartments
  * @param {object|null} mappings  — futuro: { listingId → aptId }
+ * @param {object} hostConfig
  * @returns {string|null}
  */
-export function resolveListingFromTitle(listingTitle, apartments, mappings = null) {
+export function resolveListingFromTitle(
+  listingTitle,
+  apartments,
+  mappings = null,
+  hostConfig = DEFAULT_HOST_CONFIG,
+) {
   if (!listingTitle) return null;
 
   const title = listingTitle.toLowerCase().trim();
 
-  // Step 0: mapping esplicito (priorità massima)
-  for (const [key, aptId] of Object.entries(SUBITO_TITLE_MAP)) {
-    if (title === key || title.includes(key)) return aptId;
+  // Step 0: mapping esplicito da hostConfig (priorità massima)
+  for (const apt of hostConfig.apartments) {
+    if (apt.subitoTitle && (title === apt.subitoTitle || title.includes(apt.subitoTitle))) {
+      return apt.id;
+    }
   }
 
   // Futuro: mappings dinamici da DB

@@ -11,6 +11,7 @@
 
 import { checkAvailability } from "./agentAvailability.js";
 import { groupInboxByThread } from "./groupInboxByThread.js";
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
 
 // ── Italian helpers ───────────────────────────────────────────────────────────
 
@@ -67,13 +68,23 @@ function extractMonth(text) {
 
 // ── Apartment detection ───────────────────────────────────────────────────────
 
-function detectApartment(text,apartments=[]) {
-  const l=text.toLowerCase();
-  if(/sull['']?uno\b|nell['']?uno\b|\bl['']?uno\b|appart\.?\s*1\b|apt\s*1\b/i.test(l)) return "apt1";
-  if(/sull['']?due\b|nell['']?due\b|\bl['']?due\b|appart\.?\s*2\b|apt\s*2\b/i.test(l)) return "apt2";
-  for(const apt of apartments.filter(a=>a.id!=="all")){
-    if(new RegExp("\\b"+apt.id+"\\b").test(l)) return apt.id;
-    if(apt.label&&l.includes(apt.label.toLowerCase())) return apt.id;
+function detectApartment(text, apartments = [], hostConfig = DEFAULT_HOST_CONFIG) {
+  const l = text.toLowerCase();
+  // Natural language alias patterns from hostConfig (e.g. "sull'uno" → apt1)
+  for (const apt of hostConfig.apartments) {
+    if (apt.naturalAliasPattern && apt.naturalAliasPattern.test(l)) return apt.id;
+  }
+  // Generic numeric abbreviations (appart. N, apt N) — position-based
+  for (let i = 0; i < hostConfig.apartments.length; i++) {
+    const idx = i + 1;
+    if (new RegExp(`appart\\.?\\s*${idx}\\b|apt\\s*${idx}\\b`, "i").test(l)) {
+      return hostConfig.apartments[i].id;
+    }
+  }
+  // Fallback: match by id or label from runtime apartments array
+  for (const apt of apartments.filter(a => a.id !== "all")) {
+    if (new RegExp("\\b" + apt.id + "\\b").test(l)) return apt.id;
+    if (apt.label && l.includes(apt.label.toLowerCase())) return apt.id;
   }
   return null;
 }
@@ -289,10 +300,10 @@ function computeConfidence(text, intent) {
 
 // ── Entity extraction ─────────────────────────────────────────────────────────
 
-function extractEntities(text, {apartments=[], today=""}={}) {
+function extractEntities(text, {apartments=[], today="", hostConfig=DEFAULT_HOST_CONFIG}={}) {
   return {
     guestRef:     extractGuestRef(text),
-    aptId:        detectApartment(text, apartments),
+    aptId:        detectApartment(text, apartments, hostConfig),
     dates:        extractDates(text),
     month:        extractMonth(text),
     price:        extractPrice(text),
@@ -526,12 +537,13 @@ function buildOperativePlan(intent, entities, resolution, {bookings=[], apartmen
 export function interpretMessage(text, {
   bookings=[], apartments=[], inbox=[], decisions=[], snapshot=null,
   today = new Date().toISOString().slice(0,10),
+  hostConfig = DEFAULT_HOST_CONFIG,
 }={}) {
   if(!text?.trim()) return _reply("no_action", 0.1, "Non ho sentito nulla. Ripeti?");
 
   const intent     = detectIntent(text);
   const confidence = computeConfidence(text, intent);
-  const entities   = extractEntities(text, {apartments, today});
+  const entities   = extractEntities(text, {apartments, today, hostConfig});
 
   if(INFORMATIVE_INTENTS.has(intent)) {
     const reply=buildInformativeReply(intent, entities, {snapshot, bookings, today});

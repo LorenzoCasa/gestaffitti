@@ -1,5 +1,4 @@
-const PEAK_MONTHS  = new Set([6, 7, 8]);
-const VALID_NIGHTS = [7, 14, 21];
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
 
 function weekdayUTC(isoDate) {
   return new Date(isoDate + "T12:00:00Z").getUTCDay();
@@ -32,9 +31,9 @@ function fmtDate(isoDate) {
   return d + "/" + m;
 }
 
-function buildSuggestions(anchorCheckin) {
+function buildSuggestions(anchorCheckin, validNights) {
   const satStart = nextSaturdayOnOrAfter(anchorCheckin);
-  return VALID_NIGHTS.map(n => {
+  return validNights.map(n => {
     const co = addDays(satStart, n);
     return {
       checkin:  satStart,
@@ -45,7 +44,15 @@ function buildSuggestions(anchorCheckin) {
   });
 }
 
-export function checkStayRules(checkin, checkout, { isFullMonth = false, fullMonthNum = null } = {}) {
+export function checkStayRules(
+  checkin,
+  checkout,
+  { isFullMonth = false, fullMonthNum = null } = {},
+  hostConfig = DEFAULT_HOST_CONFIG,
+) {
+  const { peakMonths, validNights, checkInDayOfWeek = 6 } = hostConfig.stayRules;
+  const PEAK_MONTHS = new Set(peakMonths);
+
   if (isFullMonth) {
     return {
       needsRules:           true,
@@ -82,9 +89,9 @@ export function checkStayRules(checkin, checkout, { isFullMonth = false, fullMon
     };
   }
 
-  const ciSat = weekdayUTC(checkin)  === 6;
-  const coSat = weekdayUTC(checkout) === 6;
-  const okN   = VALID_NIGHTS.includes(nights);
+  const ciSat = weekdayUTC(checkin)  === checkInDayOfWeek;
+  const coSat = weekdayUTC(checkout) === checkInDayOfWeek;
+  const okN   = validNights.includes(nights);
 
   if (ciSat && coSat && okN) {
     return {
@@ -108,6 +115,6 @@ export function checkStayRules(checkin, checkout, { isFullMonth = false, fullMon
     reason:               reasons.join("+"),
     nights,
     isFullMonth:          false,
-    suggestedValidRanges: buildSuggestions(checkin),
+    suggestedValidRanges: buildSuggestions(checkin, validNights),
   };
 }
