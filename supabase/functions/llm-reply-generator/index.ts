@@ -31,7 +31,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { EDGE_SEASONAL_RATES, EDGE_PEAK_MONTHS, EDGE_VALID_NIGHTS, EDGE_SUBITO_TITLE_MAP } from "../_shared/hostConfig.ts";
+import { EDGE_SEASONAL_RATES, EDGE_PEAK_MONTHS, EDGE_VALID_NIGHTS, EDGE_SUBITO_TITLE_MAP, EDGE_HOST_IDENTITY } from "../_shared/hostConfig.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -819,7 +819,7 @@ function buildSystemPrompt(context: AgentContext, rawText: string): string {
 
   void isPriceQuery; // declared for future conditional logic, not used in template yet
 
-  return `Sei l'assistente virtuale di GestAffitti per gli appartamenti vacanza "Lungomare Senigallia" a Senigallia (AN).
+  return `Sei l'assistente virtuale di GestAffitti per gli appartamenti vacanza a ${EDGE_HOST_IDENTITY.locationLine}.
 Il tuo compito è scrivere una risposta professionale e cordiale in italiano per un potenziale ospite che ha contattato il proprietario su Subito.it.
 
 ## REGOLE FONDAMENTALI

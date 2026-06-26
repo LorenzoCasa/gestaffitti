@@ -253,7 +253,7 @@ interface BrainResponse {
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT_INSTRUCTIONS = `Sei il Manager Agent di GestAffitti — agente operativo per la gestione di appartamenti estivi a Senigallia (Marche, costa adriatica).
+const SYSTEM_PROMPT_INSTRUCTIONS = `Sei il Manager Agent di GestAffitti — agente operativo per la gestione di appartamenti estivi a ${EDGE_HOST_IDENTITY.city} (${EDGE_HOST_IDENTITY.region}).
 
 HAI DUE RUOLI DISTINTI:
 

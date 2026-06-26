@@ -18,6 +18,9 @@ import { getRentalPricingRules, draftSubitoPromotion, analyzeFreeSlots } from ".
 import { resolveListingFromTitle, extractListingTitle } from "./agentListingResolver.js";
 import { interpretMessage }        from "./managerAgentBrain.js";
 import { buildAgentContext }        from "./buildAgentContext.js";
+import { buildMarketIntelligenceContext, buildMarketGuidance } from "./marketIntelligenceLayer.js";
+import { buildLegalMarketContext, generateMarketPricingAdvice } from "./legalMarketPricingEngine.js";
+import { buildFallbackPromoText } from "./marketingReplyRepair.js";
 
 let passed = 0;
 let failed = 0;
@@ -282,6 +285,68 @@ const ctx12b = buildAgentContext({
   bookings: [], aptRules: [],
 });
 assert("H12-B: buildAgentContext senza hostConfig usa default (€800)", ctx12b.pricing.totalPrice, 800);
+
+console.log("\n── H13: M5A-0 — nessun dato Lorenzo con testHostConfig ─────────────");
+
+const testHostCfg = {
+  ...DEFAULT_HOST_CONFIG,
+  identity: {
+    businessName: "Mario Rossi",
+    city:         "Pineto",
+    area:         "Lungomare",
+    region:       "Abruzzo",
+    locationLine: "Lungomare Pineto, Costa dei Trabocchi",
+  },
+};
+
+// H13-A: buildMarketIntelligenceContext → no Senigallia / no Spiaggia di Velluto
+const mktCtx = buildMarketIntelligenceContext(testHostCfg);
+assertTruthy("H13-A: area no Senigallia",          !mktCtx.area.includes("Senigallia"));
+assertTruthy("H13-A: area no Spiaggia di Velluto", !mktCtx.area.includes("Spiaggia di Velluto"));
+assertTruthy("H13-A: area contiene Pineto",         mktCtx.area.includes("Pineto"));
+
+// H13-B: buildLegalMarketContext → no senigallia_lungomare / no Senigallia / areas_covered vuoto
+const legalCtx = buildLegalMarketContext(testHostCfg);
+const legalStr  = JSON.stringify(legalCtx);
+assertTruthy("H13-B: area no Senigallia",               !legalCtx.area.includes("Senigallia"));
+assertTruthy("H13-B: areas_covered vuoto",               legalCtx.areas_covered.length === 0);
+assertTruthy("H13-B: no senigallia_lungomare in output", !legalStr.includes("senigallia_lungomare"));
+assert(      "H13-B: kb_source = none",                  legalCtx.kb_source, "none");
+
+// H13-C: buildFallbackPromoText → no Senigallia / no Spiaggia di Velluto / usa Pineto
+const slotH13 = {
+  aptId: "apt1", aptLabel: "Appartamento A",
+  start: "2026-08-01", end: "2026-08-08",
+  nights: 7, weeks: 1, month: 8, estimatedValue: 800, daysUntilStart: 30,
+};
+const promoText = buildFallbackPromoText(slotH13, { label: "Appartamento A" }, testHostCfg);
+assertTruthy("H13-C: promo no Senigallia",           !promoText.fullText.includes("Senigallia"));
+assertTruthy("H13-C: promo no Spiaggia di Velluto",  !promoText.fullText.includes("Spiaggia di Velluto"));
+assertTruthy("H13-C: promo usa locationLine Pineto",   promoText.fullText.includes("Pineto"));
+
+// H13-D: buildMarketGuidance competitors → no Senigallia con testHostConfig
+const guideCtx = buildMarketGuidance("competitors", testHostCfg);
+assertTruthy("H13-D: competitors guidance no Senigallia", !guideCtx.guidance.includes("Senigallia"));
+assertTruthy("H13-D: competitors guidance contiene Pineto", guideCtx.guidance.includes("Pineto"));
+
+// H13-E: generateMarketPricingAdvice → no_kb con host senza benchmark, no Senigallia
+const advice    = generateMarketPricingAdvice({ hostConfig: testHostCfg });
+const adviceStr = JSON.stringify(advice);
+assert(      "H13-E: intent_hint = no_kb",               advice.intent_hint, "no_kb");
+assertTruthy("H13-E: no senigallia_lungomare in advice", !adviceStr.includes("senigallia_lungomare"));
+assertTruthy("H13-E: no KB strategica Senigallia",       !adviceStr.includes("KB strategica Senigallia"));
+assertTruthy("H13-E: no KB strategica Pineto su dati SN",!adviceStr.includes("KB strategica Pineto"));
+
+// H13-F: DEFAULT Lorenzo → comportamento invariato
+const defaultMkt   = buildMarketIntelligenceContext();
+const defaultLegal = buildLegalMarketContext();
+assertTruthy("H13-F: Lorenzo market area ha Senigallia",     defaultMkt.area.includes("Senigallia"));
+assertTruthy("H13-F: Lorenzo areas_covered non vuoto",       defaultLegal.areas_covered.length > 0);
+assertTruthy("H13-F: Lorenzo kb_summary ha Senigallia",      defaultLegal.kb_summary.includes("Senigallia"));
+assertTruthy("H13-F: Lorenzo competitors guidance Senigallia",
+  buildMarketGuidance("competitors").guidance.includes("Senigallia"));
+const defaultAdv = generateMarketPricingAdvice({});
+assert("H13-F: Lorenzo generateMarketPricingAdvice → market_analysis", defaultAdv.intent_hint, "market_analysis");
 
 console.log("\n────────────────────────────────────────────────────────────────────");
 console.log(`Totale: ${passed + failed} test — ✓ ${passed} passati, ${failed > 0 ? "✗ " + failed + " falliti" : "0 falliti"}`);
