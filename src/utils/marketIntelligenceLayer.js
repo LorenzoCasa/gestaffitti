@@ -16,6 +16,8 @@
  *   separateInternalFactsFromMarketAdvice(data)   → labels internal vs market data
  */
 
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
+
 // ── Static Knowledge Base: Location ────────────────────────────────────────────
 
 const AREA = {
@@ -111,7 +113,7 @@ const REVENUE_MANAGEMENT_KB = [
 
 const LISTING_TIPS_KB = [
   "Foto professionali: aumentano CTR del 30–50% su Airbnb e Booking. Foto naturale, luminosa, ordine perfetto",
-  "Titolo: menziona 'fronte mare' o 'a 100m dal mare' e la spiaggia specifica ('Spiaggia di velluto Senigallia') — sono parole chiave SEO forti sulle piattaforme",
+  "Titolo: menziona 'fronte mare' o 'a 100m dal mare' e il nome della spiaggia locale — sono parole chiave SEO forti sulle piattaforme",
   "Filtri critici che i clienti usano: parcheggio, aria condizionata, WiFi, lavatrice. Elencali sempre e in modo evidente",
   "Tempo di risposta < 1 ora: porta al badge Superhost (Airbnb) e al rango migliore su Booking — impatto diretto sulle prenotazioni",
   "Foto della spiaggia vicina, del lungomare e delle distanze aumentano la fiducia pre-acquisto",
@@ -224,9 +226,13 @@ const MARKET_PATTERNS = [
  * Returns compact market context for inclusion in the LLM context payload.
  * Kept compact — this goes to the Edge Function on every call.
  */
-export function buildMarketIntelligenceContext() {
+export function buildMarketIntelligenceContext(hostConfig = DEFAULT_HOST_CONFIG) {
+  const identity     = hostConfig?.identity ?? {};
+  const city         = identity.city         ?? "N/D";
+  const region       = identity.region       ?? AREA.region;
+  const locationLine = identity.locationLine ?? city;
   return {
-    area:             `${AREA.city} (${AREA.region}) — ${AREA.beach}`,
+    area:             `${city} (${region}) — ${locationLine}`,
     property_type:    PROPERTY_PROFILE.type,
     business_model:   PROPERTY_PROFILE.model,
     primary_target:   PROPERTY_PROFILE.primary_target,
@@ -280,7 +286,7 @@ export function classifyMarketQuestion(text) {
  * @param {"pricing"|"competitors"|"seasonality"|"revenue"|"listing"|"guests"|"channels"|"september"|"ferragosto"|"general"} topic
  * @returns {{ topic, topic_label, guidance, has_live_data, disclaimer, ...extra }}
  */
-export function buildMarketGuidance(topic) {
+export function buildMarketGuidance(topic, hostConfig = DEFAULT_HOST_CONFIG) {
   const topicLabels = {
     pricing:     "Strategia prezzi / tariffe",
     competitors: "Concorrenza / benchmarking",
@@ -296,11 +302,13 @@ export function buildMarketGuidance(topic) {
 
   const topicLabel = topicLabels[topic] ?? topicLabels.general;
   const data       = TOPIC_GUIDES[topic] ?? TOPIC_GUIDES.general;
+  const city       = hostConfig?.identity?.city ?? "la tua città";
+  const guidance   = (data.guidance ?? "").replace(/\bSenigallia\b/g, city);
 
   return {
     topic,
     topic_label:   topicLabel,
-    guidance:      data.guidance,
+    guidance,
     has_live_data: false,
     disclaimer:    "Valutazione basata su logiche di mercato generali. Nessun dato live dalla concorrenza disponibile.",
     ...(data.tips             && { tips: data.tips }),

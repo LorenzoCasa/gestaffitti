@@ -22,6 +22,8 @@
  *   validateMarketDataTrustLevel(record)
  */
 
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const LEGAL_SOURCES  = ["manual", "csv_import", "authorized_api", "internal_history", "mock"];
@@ -160,25 +162,43 @@ function safeUniqueId(raw) {
  * Returns the legal market context for inclusion in the LLM context payload.
  * Documents which sources are legal, trust rules and static KB summary.
  */
-export function buildLegalMarketContext() {
+export function buildLegalMarketContext(hostConfig = DEFAULT_HOST_CONFIG) {
+  const city       = hostConfig?.identity?.city ?? "N/D";
+  const hasLocalKB = AREA_BENCHMARK_KB.some(b =>
+    b.area.toLowerCase().includes(city.toLowerCase())
+  );
+
+  const base = {
+    legal_sources_only: true,
+    scraping_allowed:   SCRAPING_ALLOWED,
+    supported_sources:  [...LEGAL_SOURCES],
+    source_trust_rules: { ...SOURCE_TRUST_MAP },
+    source_disclaimers: { ...SOURCE_DISCLAIMERS },
+    kb_is_mock:         true,
+    no_scraping_rule:   "Scraping da Booking/Airbnb/Subito non ammesso: viola ToS, tecnica fragile, prodotto non vendibile.",
+    pricing_advice:     {},
+    disclaimers:        [],
+  };
+
+  if (!hasLocalKB) {
+    return {
+      ...base,
+      area:            city,
+      areas_covered:   [],
+      periods_covered: [],
+      kb_summary:      `Nessun benchmark locale configurato per ${city}. Usa ricerche manuali su Airbnb/Booking per la zona.`,
+      kb_benchmark_count: 0,
+      kb_source:       "none",
+    };
+  }
+
   return {
-    legal_sources_only:  true,
-    scraping_allowed:    SCRAPING_ALLOWED,
-    supported_sources:   [...LEGAL_SOURCES],
-    area:                "Senigallia",
-    areas_covered:       ["senigallia_lungomare", "marzocca", "cesano", "ciarnin"],
-    periods_covered:     ["june", "july", "august", "ferragosto", "september"],
-    kb_summary:
-      "Benchmark strategici (mock) disponibili per Senigallia e zone limitrofe. " +
-      "Nessun dato live. Fonti reali ammesse: manual, csv_import, authorized_api, internal_history.",
-    source_trust_rules:  { ...SOURCE_TRUST_MAP },
-    source_disclaimers:  { ...SOURCE_DISCLAIMERS },
-    kb_benchmark_count:  AREA_BENCHMARK_KB.length,
-    kb_is_mock:          true,
-    no_scraping_rule:
-      "Scraping da Booking/Airbnb/Subito non ammesso: viola ToS, tecnica fragile, prodotto non vendibile.",
-    pricing_advice:      {},
-    disclaimers:         [],
+    ...base,
+    area:            city,
+    areas_covered:   ["senigallia_lungomare", "marzocca", "cesano", "ciarnin"],
+    periods_covered: ["june", "july", "august", "ferragosto", "september"],
+    kb_summary:      `Benchmark strategici (mock) disponibili per ${city} e zone limitrofe. Nessun dato live. Fonti reali ammesse: manual, csv_import, authorized_api, internal_history.`,
+    kb_benchmark_count: AREA_BENCHMARK_KB.length,
   };
 }
 
@@ -411,6 +431,7 @@ export function suggestPriceStrategy({
   daysToCheckin  = null,
   occupancy_pct  = null,
   competitors    = [],
+  hostConfig     = DEFAULT_HOST_CONFIG,
 } = {}) {
   const benchmark = calculateBenchmarkRange(competitors, { period, area, periodStart, periodEnd });
   const pos       = analyzePricePosition(current_price, benchmark);
@@ -481,10 +502,14 @@ export function suggestPriceStrategy({
   const suggested_target = avg;
   const suggested_max    = max != null ? Math.round(max * 1.1) : null;
 
+  const kbCity     = hostConfig?.identity?.city ?? "";
+  const hasLocalKB = kbCity
+    ? AREA_BENCHMARK_KB.some(b => b.area.toLowerCase().includes(kbCity.toLowerCase()))
+    : false;
   const data_sources = [
     ...new Set([
       ...competitors.map(c => c.source_name ?? c.source_type).filter(Boolean),
-      ...(benchmark.is_mock ? ["KB strategica Senigallia (mock — non live)"] : []),
+      ...(benchmark.is_mock && hasLocalKB ? [`KB strategica ${kbCity} (mock — non live)`] : []),
     ]),
   ];
 
@@ -532,8 +557,38 @@ export function generateMarketPricingAdvice({
   competitors    = [],
   daysToCheckin  = null,
   occupancy_pct  = null,
+  hostConfig     = DEFAULT_HOST_CONFIG,
 } = {}) {
-  const strategy          = suggestPriceStrategy({ current_price, period, area, periodStart, periodEnd, daysToCheckin, occupancy_pct, competitors });
+  const city       = hostConfig?.identity?.city ?? "";
+  const hasLocalKB = city
+    ? AREA_BENCHMARK_KB.some(b => b.area.toLowerCase().includes(city.toLowerCase()))
+    : false;
+
+  // No local KB and no real competitors: can't run meaningful analysis
+  if (!hasLocalKB && (!competitors || competitors.length === 0)) {
+    const noDataBenchmark = {
+      min: null, max: null, avg: null, median: null, count: 0,
+      trust_level: "low", is_mock: true,
+      disclaimer: SOURCE_DISCLAIMERS.mock + " Nessun benchmark disponibile per area/periodo.",
+    };
+    return {
+      strategy: {
+        current_price, suggested_min: null, suggested_target: null, suggested_max: null,
+        position: "unknown", confidence: 0, demand_level: "unknown",
+        reasoning: [`Nessun benchmark locale disponibile per ${city || "questo host"}. Esegui ricerche manuali su Airbnb/Booking per la zona.`],
+        recommendations: ["Inserisci manualmente prezzi di mercato rilevati da Airbnb/Booking per la tua area."],
+        disclaimer: SOURCE_DISCLAIMERS.mock,
+        data_sources: [],
+      },
+      benchmark:        noDataBenchmark,
+      position_analysis: analyzePricePosition(current_price, noDataBenchmark),
+      intent_hint:        "no_kb",
+      action_plan:        null,
+      needs_confirmation: false,
+    };
+  }
+
+  const strategy          = suggestPriceStrategy({ current_price, period, area, periodStart, periodEnd, daysToCheckin, occupancy_pct, competitors, hostConfig });
   const benchmark         = calculateBenchmarkRange(competitors, { period, area, periodStart, periodEnd });
   const position_analysis = analyzePricePosition(current_price, benchmark);
 

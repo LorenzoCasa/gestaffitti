@@ -10,6 +10,8 @@
  *   - tests/marketingReplyRepair.test.js
  */
 
+import { DEFAULT_HOST_CONFIG } from "../config/hostConfig.js";
+
 // ── Parole chiave che indicano richiesta annuncio/inserzione Subito ────────────
 
 const MARKETING_KEYWORDS = [
@@ -80,7 +82,7 @@ const MONTH_NAMES = {
  * @param {object|null} apartment  — { id, label }
  * @returns {{ title, body, fullText }|null}
  */
-export function buildFallbackPromoText(slot, apartment) {
+export function buildFallbackPromoText(slot, apartment, hostConfig = DEFAULT_HOST_CONFIG) {
   if (!slot) return null;
 
   const aptLabel  = apartment?.label ?? slot.aptLabel ?? "Appartamento";
@@ -108,10 +110,10 @@ export function buildFallbackPromoText(slot, apartment) {
   const body = [
     `📅 Periodo: ${dateRange} (${slot.nights} notti / ${weeksLabel})`,
     `💶 Prezzo consigliato: ${priceLabel}`,
-    `📍 Lungomare Senigallia, Spiaggia di Velluto`,
+    `📍 ${hostConfig.identity.locationLine}`,
     ``,
     `${aptLabel} disponibile per il periodo ${dateRange}.`,
-    `Ideale per famiglie o coppie. Posizione fronte mare sul lungomare di Senigallia.`,
+    `Ideale per famiglie o coppie. Posizione fronte mare.`,
     ``,
     `📩 Contattami indicando numero di persone e periodo richiesto. Risposta rapida garantita.`,
   ].join("\n");
@@ -130,11 +132,11 @@ export function buildFallbackPromoText(slot, apartment) {
  * @param {object|null} apartment      — appartamento corrispondente al topSlot
  * @returns {object}   brainResponse eventualmente riparata
  */
-export function repairMarketingReply(brainResponse, message, topSlot, apartment) {
+export function repairMarketingReply(brainResponse, message, topSlot, apartment, hostConfig = DEFAULT_HOST_CONFIG) {
   if (!detectMarketingIntent(message)) return brainResponse;
   if (!isReplyBodyMissing(brainResponse?.reply)) return brainResponse;
 
-  const draft = buildFallbackPromoText(topSlot, apartment);
+  const draft = buildFallbackPromoText(topSlot, apartment, hostConfig);
   if (!draft) return brainResponse;
 
   const intro = brainResponse?.reply?.trim()
