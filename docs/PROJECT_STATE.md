@@ -206,29 +206,42 @@ PR/stati rilevanti noti:
 - validazione del motore con host alternativo tramite `testHostConfig.js`/template
 - obiettivo: verificare che il sistema possa iniziare a ragionare oltre il singolo host Lorenzo/Senigallia
 
+### PR #34 — docs: PROJECT_STATE.md
+- mergeata (commit `5d1a5ac`)
+- aggiunto `docs/PROJECT_STATE.md` come fonte di verità ufficiale del progetto
+
+### PR #35 — M5A-0 Beta Host Readiness
+- mergeata (commit merge `7484a3f`, 2026-06-26)
+- M5A-0 completato e deployato
+- rimozione riferimenti hardcoded Lorenzo/Senigallia/Lungomare/Spiaggia di Velluto dalle utility del motore
+- file modificati: `manager-agent-brain`, `llm-reply-generator`, `marketingReplyRepair.js`, `marketIntelligenceLayer.js`, `legalMarketPricingEngine.js`, `test-hostConfig.mjs`
+- Edge Functions deployate: `manager-agent-brain`, `llm-reply-generator`
+- test: 85/85 H01–H13 ✓, 74/74 npm test ✓, 16/16 marketingReplyRepair ✓
+- invariante: comportamento Lorenzo con `DEFAULT_HOST_CONFIG` identico a prima
+
 ## 11. Stato attuale
 
-M4 è completato.
+M5A-0 è completato e deployato.
 
 Ultima cosa fatta:
-- PR #33 mergeata
-- Second Host Config Test completato
-- validato il motore con host alternativo tramite `testHostConfig.js`/template
-
-Ora è aperta la decisione M5.
+- PR #35 mergeata su main
+- Edge Functions `manager-agent-brain` e `llm-reply-generator` deployate su Supabase
+- motore GestAffitti è ora host-config driven: nessun riferimento hardcoded a Lorenzo/Senigallia fuori da `hostConfig.js` e `_shared/hostConfig.ts`
+- sezione H13 nel test suite verifica che host alternativo (testHostConfig) non produca dati Lorenzo
 
 Opzioni M5:
 
-- M5A — secondo deploy / beta host reale usando `testHostConfig.js` come template
+- M5A-0 — ✅ completato (Beta Host Readiness / rimozione hardcoded)
+- M5A-1 — secondo deploy / beta host reale: creare config host reale usando `testHostConfig.js` come template
 - M5B — preparazione multi-tenant DB solo se beta host reale è confermato
 - M5C — piano Next.js
 
 ## 12. Decisione consigliata M5
 
-Scelta consigliata: M5A.
+Prossimo step: M5A-1.
 
-Motivo:
-prima bisogna validare un secondo host reale/beta host reale. Solo dopo ha senso investire in multi-tenant DB.
+Obiettivo M5A-1:
+creare una configurazione reale per un beta host (non Lorenzo), verificare che il motore generi output corretti con quella config, senza DB multi-tenant.
 
 M5B non va iniziata prima di avere un beta host reale confermato.
 
@@ -252,19 +265,18 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 
 ## 14. Prossimo passo operativo
 
-Aprire M5A.
+Aprire M5A-1: secondo host reale / beta host deploy.
 
-Obiettivo M5A:
-validare un secondo host reale/beta host reale usando il lavoro fatto in M4 come base.
+Obiettivo M5A-1:
+creare una configurazione reale per un beta host (non Lorenzo), verificare che il motore produca output corretti con quella config.
 
-Possibili sotto-step M5A:
-1. definire dati minimi necessari per un beta host reale
-2. usare `testHostConfig.js` come template
-3. creare una configurazione host reale ma controllata
-4. verificare messaggi/prezzi/regole/disponibilità
-5. evitare multi-tenant strutturale finché non serve davvero
-6. documentare limiti e differenze rispetto al caso Lorenzo/Senigallia
-7. decidere solo dopo se aprire M5B
+Possibili sotto-step M5A-1:
+1. definire dati minimi necessari per un beta host reale (identità, appartamenti, prezzi, regole)
+2. creare `src/config/hostConfig.betaHost.js` a partire da `testHostConfig.js` come template
+3. verificare messaggi/prezzi/regole/disponibilità con la config reale
+4. evitare multi-tenant strutturale finché non serve davvero
+5. documentare limiti e differenze rispetto al caso Lorenzo/Senigallia
+6. decidere solo dopo se aprire M5B
 
 ## 15. Rischi aperti
 
@@ -279,7 +291,7 @@ Possibili sotto-step M5A:
 
 Quando si apre una nuova chat per GestAffitti, incollare:
 
-"Siamo nel progetto GestAffitti. Lo stato tecnico ufficiale è nel file `docs/PROJECT_STATE.md` del repo. Stato sintetico: M1, M2, M3 completati; M3 deployato; M4 completato e PR #33 mergeata. Decisione aperta M5: M5A beta host reale consigliato, M5B multi-tenant solo se beta confermato, M5C piano Next.js. Prima di proporre task, ragiona sullo stato e non portarmi fuori roadmap."
+"Siamo nel progetto GestAffitti. Lo stato tecnico ufficiale è nel file `docs/PROJECT_STATE.md` del repo. Stato sintetico: M1–M4 completati; M5A-0 Beta Host Readiness completato e deployato (PR #35, commit 7484a3f). Il motore è ora host-config driven. Prossimo step: M5A-1 beta host reale. M5B multi-tenant solo se beta confermato, M5C piano Next.js. Prima di proporre task, ragiona sullo stato e non portarmi fuori roadmap."
 
 ## 17. Regola di aggiornamento a fine sessione
 
