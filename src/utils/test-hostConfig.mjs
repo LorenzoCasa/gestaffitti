@@ -12,6 +12,7 @@
  */
 
 import { DEFAULT_HOST_CONFIG }  from "../config/hostConfig.js";
+import { BETA_HOST_CONFIG }      from "../config/hostConfig.betaHost.js";
 import { getSubitoSeasonalPrice } from "./agentSeasonalRates.js";
 import { checkStayRules }          from "./agentStayRules.js";
 import { getRentalPricingRules, draftSubitoPromotion, analyzeFreeSlots } from "./rentalBusinessBrain.js";
@@ -347,6 +348,121 @@ assertTruthy("H13-F: Lorenzo competitors guidance Senigallia",
   buildMarketGuidance("competitors").guidance.includes("Senigallia"));
 const defaultAdv = generateMarketPricingAdvice({});
 assert("H13-F: Lorenzo generateMarketPricingAdvice → market_analysis", defaultAdv.intent_hint, "market_analysis");
+
+console.log("\n── H14: M5A-1 — Config beta B&B MARE Riccione ──────────────────────");
+
+// H14-A: struttura identità
+assert("H14-A: identity.city = Riccione",              BETA_HOST_CONFIG.identity.city,         "Riccione");
+assert("H14-A: identity.businessName = B&B MARE",      BETA_HOST_CONFIG.identity.businessName, "B&B MARE");
+assert("H14-A: identity.region = Emilia-Romagna",      BETA_HOST_CONFIG.identity.region,       "Emilia-Romagna");
+assertTruthy("H14-A: locationLine contiene Riccione",  BETA_HOST_CONFIG.identity.locationLine.includes("Riccione"));
+assertTruthy("H14-A: locationLine contiene Lungomare", BETA_HOST_CONFIG.identity.locationLine.includes("Lungomare"));
+
+// H14-B: nessun leak Senigallia nella config beta
+const betaStr = JSON.stringify(BETA_HOST_CONFIG);
+assertTruthy("H14-B: no Senigallia",            !betaStr.includes("Senigallia"));
+assertTruthy("H14-B: no Spiaggia di Velluto",   !betaStr.includes("Spiaggia di Velluto"));
+assertTruthy("H14-B: no senigallia_lungomare",  !betaStr.includes("senigallia_lungomare"));
+assertTruthy("H14-B: no Lungomare Senigallia",  !betaStr.includes("Lungomare Senigallia"));
+
+// H14-C: prezzi per notte
+assert("H14-C: agosto nightly = 190",     BETA_HOST_CONFIG.seasonalRates[8].nightly, 190);
+assert("H14-C: luglio nightly = 160",     BETA_HOST_CONFIG.seasonalRates[7].nightly, 160);
+assert("H14-C: giugno nightly = 120",     BETA_HOST_CONFIG.seasonalRates[6].nightly, 120);
+assert("H14-C: settembre nightly = 130",  BETA_HOST_CONFIG.seasonalRates[9].nightly, 130);
+assert("H14-C: bassa stagione nightly = 80", BETA_HOST_CONFIG.seasonalRates[1].nightly, 80);
+assert("H14-C: ferragosto nightly = 230", BETA_HOST_CONFIG.specialRates.ferragosto.nightly, 230);
+assert("H14-C: pricingModel = nightly",   BETA_HOST_CONFIG.pricingModel, "nightly");
+// weekly = nightly × 7 per compatibilità motore
+assert("H14-C: agosto weekly = 190×7",    BETA_HOST_CONFIG.seasonalRates[8].weekly, 1330);
+
+// H14-D: 5 camere B&B
+assert("H14-D: apartments.length = 5",      BETA_HOST_CONFIG.apartments.length, 5);
+assert("H14-D: cam1 id",                    BETA_HOST_CONFIG.apartments[0].id,    "cam1");
+assert("H14-D: cam1 label = Camera 1",      BETA_HOST_CONFIG.apartments[0].label, "Camera 1");
+assert("H14-D: cam5 id",                    BETA_HOST_CONFIG.apartments[4].id,    "cam5");
+assert("H14-D: cam5 label = Camera 5",      BETA_HOST_CONFIG.apartments[4].label, "Camera 5");
+assert("H14-D: cam1 hasBalcone = true",     BETA_HOST_CONFIG.apartments[0].hasBalcone, true);
+assert("H14-D: cam3 hasBalcone = true",     BETA_HOST_CONFIG.apartments[2].hasBalcone, true);
+assert("H14-D: cam4 hasBalcone = false",    BETA_HOST_CONFIG.apartments[3].hasBalcone, false);
+assert("H14-D: cam5 hasBalcone = false",    BETA_HOST_CONFIG.apartments[4].hasBalcone, false);
+assertTruthy("H14-D: ogni camera ha numericAlias",
+  BETA_HOST_CONFIG.apartments.every((a, i) => a.numericAlias === i + 1));
+assertTruthy("H14-D: ogni camera ha naturalAliasPattern RegExp",
+  BETA_HOST_CONFIG.apartments.every(a => a.naturalAliasPattern instanceof RegExp));
+
+// H14-E: regole soggiorno B&B
+assert("H14-E: minNights = 1",             BETA_HOST_CONFIG.stayRules.minNights, 1);
+assert("H14-E: checkInDayOfWeek = null",   BETA_HOST_CONFIG.stayRules.checkInDayOfWeek, null);
+assert("H14-E: weekendsAllowed = true",    BETA_HOST_CONFIG.stayRules.weekendsAllowed, true);
+assert("H14-E: validNights length = 0",    BETA_HOST_CONFIG.stayRules.validNights.length, 0);
+assert("H14-E: fullMonthEligible = false", BETA_HOST_CONFIG.stayRules.fullMonthEligible, false);
+assert("H14-E: septemberFlexible = true",  BETA_HOST_CONFIG.stayRules.septemberFlexible, true);
+
+// H14-F: supplemento ospiti
+assert("H14-F: baseGuests = 2",            BETA_HOST_CONFIG.guestSupplements.baseGuests, 2);
+assert("H14-F: extraPersonPerNight = 20",  BETA_HOST_CONFIG.guestSupplements.extraPersonPerNight, 20);
+assert("H14-F: maxGuests = 4",             BETA_HOST_CONFIG.guestSupplements.maxGuests, 4);
+
+// H14-G: buildMarketIntelligenceContext → Riccione, no Senigallia
+const mktCtxBeta = buildMarketIntelligenceContext(BETA_HOST_CONFIG);
+assertTruthy("H14-G: area contiene Riccione",          mktCtxBeta.area.includes("Riccione"));
+assertTruthy("H14-G: area no Senigallia",              !mktCtxBeta.area.includes("Senigallia"));
+assertTruthy("H14-G: area no Spiaggia di Velluto",    !mktCtxBeta.area.includes("Spiaggia di Velluto"));
+
+// H14-H: buildLegalMarketContext → no_kb per Riccione
+const legalCtxBeta  = buildLegalMarketContext(BETA_HOST_CONFIG);
+const legalBetaStr  = JSON.stringify(legalCtxBeta);
+assert(      "H14-H: kb_source = none",                legalCtxBeta.kb_source, "none");
+assertTruthy("H14-H: areas_covered vuoto",             legalCtxBeta.areas_covered.length === 0);
+assertTruthy("H14-H: area = Riccione",                 legalCtxBeta.area === "Riccione");
+assertTruthy("H14-H: no senigallia_lungomare",        !legalBetaStr.includes("senigallia_lungomare"));
+assertTruthy("H14-H: no Senigallia nel legal ctx",    !legalBetaStr.includes("Senigallia"));
+
+// H14-I: buildFallbackPromoText → usa locationLine Riccione
+const slotBeta = {
+  aptId: "cam1", aptLabel: "Camera 1",
+  start: "2026-08-01", end: "2026-08-08",
+  nights: 7, weeks: 1, month: 8, estimatedValue: 1330, daysUntilStart: 30,
+};
+const promoBeta = buildFallbackPromoText(slotBeta, { label: "Camera 1" }, BETA_HOST_CONFIG);
+assertTruthy("H14-I: promo no Senigallia",          !promoBeta.fullText.includes("Senigallia"));
+assertTruthy("H14-I: promo no Spiaggia di Velluto", !promoBeta.fullText.includes("Spiaggia di Velluto"));
+assertTruthy("H14-I: promo usa locationLine Riccione", promoBeta.fullText.includes("Riccione"));
+
+// H14-J: buildMarketGuidance competitors → no Senigallia, ha Riccione
+const guideBeta = buildMarketGuidance("competitors", BETA_HOST_CONFIG);
+assertTruthy("H14-J: guidance no Senigallia",  !guideBeta.guidance.includes("Senigallia"));
+assertTruthy("H14-J: guidance ha Riccione",     guideBeta.guidance.includes("Riccione"));
+
+// H14-K: generateMarketPricingAdvice → intent_hint = no_kb per Riccione
+const adviceBeta    = generateMarketPricingAdvice({ hostConfig: BETA_HOST_CONFIG });
+const adviceBetaStr = JSON.stringify(adviceBeta);
+assert(      "H14-K: intent_hint = no_kb",              adviceBeta.intent_hint, "no_kb");
+assertTruthy("H14-K: no senigallia_lungomare",         !adviceBetaStr.includes("senigallia_lungomare"));
+assertTruthy("H14-K: no KB strategica Senigallia",     !adviceBetaStr.includes("KB strategica Senigallia"));
+assertTruthy("H14-K: no KB strategica Riccione su dati SN", !adviceBetaStr.includes("KB strategica Riccione"));
+
+// H14-L: getRentalPricingRules funziona con beta config senza errori
+let rulesBetaNoThrow = true;
+let rulesBeta;
+try {
+  rulesBeta = getRentalPricingRules(BETA_HOST_CONFIG);
+} catch (e) {
+  rulesBetaNoThrow = false;
+}
+assertTruthy("H14-L: getRentalPricingRules no throw con beta config", rulesBetaNoThrow);
+assertTruthy("H14-L: seasonal_rates[8] presente",    rulesBeta?.seasonal_rates?.[8] != null);
+assert("H14-L: agosto weekly = 1330 (nightly×7)",    rulesBeta?.seasonal_rates?.[8]?.weekly, 1330);
+assert("H14-L: agosto season = peak",                rulesBeta?.seasonal_rates?.[8]?.season, "peak");
+
+// H14-M: Lorenzo DEFAULT invariato (invariant check)
+assert("H14-M: Lorenzo identity.city = Senigallia",         DEFAULT_HOST_CONFIG.identity.city,              "Senigallia");
+assert("H14-M: Lorenzo stayRules.checkInDayOfWeek = 6",     DEFAULT_HOST_CONFIG.stayRules.checkInDayOfWeek, 6);
+assert("H14-M: Lorenzo stayRules.minNights = undefined",    DEFAULT_HOST_CONFIG.stayRules.minNights,        undefined);
+assert("H14-M: Lorenzo apartments.length = 2",              DEFAULT_HOST_CONFIG.apartments.length,          2);
+assert("H14-M: Lorenzo seasonalRates[8].weekly = 800",      DEFAULT_HOST_CONFIG.seasonalRates[8].weekly,    800);
+assertTruthy("H14-M: Lorenzo locationLine ha Senigallia",   DEFAULT_HOST_CONFIG.identity.locationLine.includes("Senigallia"));
 
 console.log("\n────────────────────────────────────────────────────────────────────");
 console.log(`Totale: ${passed + failed} test — ✓ ${passed} passati, ${failed > 0 ? "✗ " + failed + " falliti" : "0 falliti"}`);

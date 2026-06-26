@@ -166,7 +166,10 @@ Stato milestone:
 - M2: chiuso
 - M3: chiuso e deployato
 - M4: chiuso e mergeato con PR #33
-- M5: decisione aperta
+- M5A-0: chiuso e deployato (PR #35)
+- M5A-1: implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — in attesa di PR/merge
+- M5B: bloccata — aspetta validazione beta host reale end-to-end
+- M5C: bloccata — aspetta decisione esplicita Next.js
 
 PR/stati rilevanti noti:
 
@@ -219,33 +222,39 @@ PR/stati rilevanti noti:
 - test: 85/85 H01–H13 ✓, 74/74 npm test ✓, 16/16 marketingReplyRepair ✓
 - invariante: comportamento Lorenzo con `DEFAULT_HOST_CONFIG` identico a prima
 
+### M5A-1 — Beta Host Config B&B MARE Riccione
+- implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` (2026-06-27)
+- in attesa di PR/merge su main — nessun deploy eseguito
+- creata `src/config/hostConfig.betaHost.js` — config B&B MARE Riccione (host: Davide, Emilia-Romagna)
+- 5 camere (Camera 1–5): letto matrimoniale + divano letto, capienza max 4, bagno privato, angolo cottura, A/C, TV, Wi-Fi; balcone Camera 1/2/3 sì, Camera 4/5 no
+- pricing per notte: bassa 80€, media 100€, giugno 120€, luglio 160€, agosto 190€, ferragosto 230€, settembre 130€, capodanno/eventi 160€
+- supplemento ospiti: +20€/notte per 3ª e 4ª persona (base fino a 2)
+- stayRules: minNights=1, nessun obbligo sabato-sabato, weekendsAllowed=true, check-in qualsiasi giorno
+- aggiunta sezione H14 (64 test) in `test-hostConfig.mjs`
+- test: 149/149 ✓ · 74/74 npm test ✓ · build ✓
+- invariante: DEFAULT_HOST_CONFIG Lorenzo confermato identico
+- vincoli rispettati: nessun DB, nessun host_id/tenant_id/owner_id, nessun multi-tenant, nessuna Edge Function modificata, nessun Next.js
+
 ## 11. Stato attuale
 
-M5A-0 è completato e deployato.
+M5A-0 completato e deployato. M5A-1 implementata su branch, in attesa di PR/merge.
 
 Ultima cosa fatta:
-- PR #35 mergeata su main
-- Edge Functions `manager-agent-brain` e `llm-reply-generator` deployate su Supabase
-- motore GestAffitti è ora host-config driven: nessun riferimento hardcoded a Lorenzo/Senigallia fuori da `hostConfig.js` e `_shared/hostConfig.ts`
-- sezione H13 nel test suite verifica che host alternativo (testHostConfig) non produca dati Lorenzo
-
-Opzioni M5:
-
-- M5A-0 — ✅ completato (Beta Host Readiness / rimozione hardcoded)
-- M5A-1 — secondo deploy / beta host reale: creare config host reale usando `testHostConfig.js` come template
-- M5B — preparazione multi-tenant DB solo se beta host reale è confermato
-- M5C — piano Next.js
+- branch `feat/m5a-1-beta-host-config`, commit `77be101`
+- creata `src/config/hostConfig.betaHost.js` — config beta B&B MARE Riccione
+- aggiunta sezione H14 (64 test) in `test-hostConfig.mjs`
+- 149/149 test verdi, build verde
+- nessun deploy, nessuna modifica Edge Functions, nessun DB
 
 ## 12. Decisione consigliata M5
 
-Prossimo step: M5A-1.
+M5A-1 è implementata e pronta per PR verso main.
 
-Obiettivo M5A-1:
-creare una configurazione reale per un beta host (non Lorenzo), verificare che il motore generi output corretti con quella config, senza DB multi-tenant.
-
-M5B non va iniziata prima di avere un beta host reale confermato.
-
-M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la validazione prodotto/mercato.
+Dopo il merge di M5A-1:
+1. smoke test manuale pipeline completa con BETA_HOST_CONFIG (pricing / stay rules / marketing reply)
+2. valutare se aprire M5A-2 (test pipeline nightly + stayRules B&B) o passare direttamente a M5B
+3. M5B multi-tenant solo dopo validazione beta host reale end-to-end
+4. Next.js (M5C) solo con decisione esplicita
 
 ## 13. Regole operative fondamentali
 
@@ -257,7 +266,7 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 - Non fare merge senza conferma esplicita.
 - Non fare deploy senza conferma esplicita.
 - Non modificare schema DB, secrets o configurazioni sensibili senza conferma esplicita.
-- Non iniziare M5B prima di confermare un beta host reale.
+- Non iniziare M5B prima di avere un beta host reale validato end-to-end.
 - Non iniziare Next.js senza decisione esplicita.
 - Prima di proporre task tecnici, leggere sempre questo file.
 - Le modifiche devono essere piccole, verificabili e preferibilmente isolate in PR dedicate.
@@ -265,33 +274,37 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 
 ## 14. Prossimo passo operativo
 
-Aprire M5A-1: secondo host reale / beta host deploy.
+Aprire PR per M5A-1 e mergeare su main dopo review.
 
-Obiettivo M5A-1:
-creare una configurazione reale per un beta host (non Lorenzo), verificare che il motore produca output corretti con quella config.
+Stato M5A-1:
+- branch `feat/m5a-1-beta-host-config`, commit `77be101`
+- `src/config/hostConfig.betaHost.js` creato
+- `src/utils/test-hostConfig.mjs` aggiornato con sezione H14 (64 test)
+- 149/149 test verdi · 74/74 npm test verdi · build verde
 
-Possibili sotto-step M5A-1:
-1. definire dati minimi necessari per un beta host reale (identità, appartamenti, prezzi, regole)
-2. creare `src/config/hostConfig.betaHost.js` a partire da `testHostConfig.js` come template
-3. verificare messaggi/prezzi/regole/disponibilità con la config reale
-4. evitare multi-tenant strutturale finché non serve davvero
-5. documentare limiti e differenze rispetto al caso Lorenzo/Senigallia
-6. decidere solo dopo se aprire M5B
+Dopo il merge di M5A-1:
+1. smoke test manuale pipeline con BETA_HOST_CONFIG
+2. verificare pricing/stay rules/marketing reply con dati B&B MARE
+3. valutare M5A-2 o passare direttamente a M5B
+4. M5B multi-tenant solo se beta host reale validato end-to-end
+5. Next.js (M5C) solo con decisione esplicita
 
 ## 15. Rischi aperti
 
 - Costruire multi-tenant troppo presto.
 - Migrare a Next.js prima di validare il secondo host reale.
-- Confondere test host fittizio con beta host reale.
+- Confondere BETA_HOST_CONFIG (simulazione interna) con un beta host reale in produzione.
 - Usare memoria ChatGPT come fonte dati invece del repo/DB.
 - Accumulare modifiche Edge Functions senza deploy controllato.
 - Fare PR troppo grandi e difficili da validare.
+- `interpretMessage` non è ancora testato con alias "Camera 1", "Camera 2" ecc. — potrebbe richiedere adattamenti nel motore agente per il caso B&B.
+- La config beta è solo simulazione interna del motore: nessun flusso UI o DB coinvolto.
 
 ## 16. Prompt consigliato per nuove chat ChatGPT
 
 Quando si apre una nuova chat per GestAffitti, incollare:
 
-"Siamo nel progetto GestAffitti. Lo stato tecnico ufficiale è nel file `docs/PROJECT_STATE.md` del repo. Stato sintetico: M1–M4 completati; M5A-0 Beta Host Readiness completato e deployato (PR #35, commit 7484a3f). Il motore è ora host-config driven. Prossimo step: M5A-1 beta host reale. M5B multi-tenant solo se beta confermato, M5C piano Next.js. Prima di proporre task, ragiona sullo stato e non portarmi fuori roadmap."
+"Siamo nel progetto GestAffitti. Lo stato tecnico ufficiale è nel file docs/PROJECT_STATE.md del repo. Stato sintetico: M1-M4 completati; M5A-0 completato e deployato; M5A-1 Beta Host Config B&B MARE Riccione implementata su branch feat/m5a-1-beta-host-config, commit 77be101, in attesa di PR/merge. M5B multi-tenant bloccata finché il beta host non è validato end-to-end. Next.js/M5C fermo salvo decisione esplicita. Prima di proporre task, leggere PROJECT_STATE.md e restare in roadmap."
 
 ## 17. Regola di aggiornamento a fine sessione
 
