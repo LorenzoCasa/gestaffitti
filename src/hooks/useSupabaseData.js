@@ -7,6 +7,7 @@ export default function useSupabaseData() {
   const [user, setUser] = useState(null);
   const [profileError, setProfileError] = useState(false);
   const [aptLoadError, setAptLoadError] = useState(false);
+  const [needsPasswordReset, setNeedsPasswordReset] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [apartments, setApartments] = useState([]);
@@ -57,19 +58,28 @@ export default function useSupabaseData() {
     // React Strict Mode (doppio mount) né di ritardi nel token refresh.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isMounted) return;
+      // Se l'URL contiene type=recovery, aspetta l'evento PASSWORD_RECOVERY da onAuthStateChange
+      if (window.location.hash.includes("type=recovery")) return;
       if (session) handleSession(session);
       else setLoading(false);
     });
 
-    // Ascolta solo i cambiamenti successivi (login / logout)
+    // Ascolta solo i cambiamenti successivi (login / logout / recovery)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       console.log("[auth] evento:", event, "user:", session?.user?.email || "none");
       if (event === "SIGNED_IN" && session) {
         setLoading(true);
         handleSession(session);
+      } else if (event === "PASSWORD_RECOVERY" && session) {
+        setNeedsPasswordReset(true);
+        setLoading(false);
+      } else if (event === "USER_UPDATED" && session) {
+        setNeedsPasswordReset(false);
+        setLoading(true);
+        handleSession(session);
       } else if (event === "SIGNED_OUT") {
-        setUser(null); setProfileError(false); setAptLoadError(false);
+        setUser(null); setProfileError(false); setAptLoadError(false); setNeedsPasswordReset(false);
         setBookings([]); setExpenses([]); setApartments([]); setCategories(CATEGORIES_FALLBACK);
         setLoading(false);
       }
@@ -188,7 +198,7 @@ export default function useSupabaseData() {
   const handleLogout = async () => { await supabase.auth.signOut(); };
 
   return {
-    user, loading, profileError, aptLoadError,
+    user, loading, profileError, aptLoadError, needsPasswordReset,
     bookings, expenses: expensesWithMeta, apartments, categories,
     handleLogout,
     addBooking, updateBooking, deleteBooking,

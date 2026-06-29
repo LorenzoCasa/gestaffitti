@@ -221,20 +221,27 @@ PR/stati rilevanti noti:
 
 ## 11. Stato attuale
 
-M5A-0 è completato e deployato.
+M5B completato su branch `feat/m5b-multi-tenant-isolation`, in attesa di PR/merge.
 
-Ultima cosa fatta:
-- PR #35 mergeata su main
-- Edge Functions `manager-agent-brain` e `llm-reply-generator` deployate su Supabase
-- motore GestAffitti è ora host-config driven: nessun riferimento hardcoded a Lorenzo/Senigallia fuori da `hostConfig.js` e `_shared/hostConfig.ts`
-- sezione H13 nel test suite verifica che host alternativo (testHostConfig) non produca dati Lorenzo
+Milestone M5:
 
-Opzioni M5:
+- M5A-0 — ✅ completato e deployato (PR #35)
+- M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — in attesa di PR/merge
+- M5B — ✅ implementata su branch `feat/m5b-multi-tenant-isolation` — in attesa di PR/merge
+- M5C — bloccata — aspetta decisione esplicita Next.js
 
-- M5A-0 — ✅ completato (Beta Host Readiness / rimozione hardcoded)
-- M5A-1 — secondo deploy / beta host reale: creare config host reale usando `testHostConfig.js` come template
-- M5B — preparazione multi-tenant DB solo se beta host reale è confermato
-- M5C — piano Next.js
+Ultima cosa fatta (M5B — 2026-06-30):
+- branch `feat/m5b-multi-tenant-isolation` da main
+- migration `supabase/migrations/m5b_multi_tenant_isolation.sql` applicata al DB linked
+- `apartments.owner_id` popolato: apt1/apt2/property → Lorenzo (`adf5d712`)
+- `agent_inbox.owner_id` aggiunto (ALTER TABLE) e backfillato: 55 messaggi → Lorenzo
+- RLS sostituite: zero policy `allow all` su dati operativi
+- policy aggiunte: owner per-tenant su bookings/expenses/apartments/inbox/decisions/apt_rules; cleaner full su bookings
+- Edge Function `agent-webhook/index.ts`: `owner_id` aggiunto al INSERT
+- `_shared/hostConfig.ts`: aggiunto `ownerUUID` a `EDGE_HOST_IDENTITY`
+- riga virtuale `property` inserita in `apartments` (active=false) per coprire le 9 spese comuni di Lorenzo
+- isolamento verificato: Lorenzo vede 10 booking / 13 spese / 2 apt attivi / 55 inbox; B&B MARE vede 0
+- build verde · nessun deploy · nessuna cancellazione dati · nessun dato Lorenzo perso
 
 ## 12. Decisione consigliata M5
 
@@ -265,27 +272,27 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 
 ## 14. Prossimo passo operativo
 
-Aprire M5A-1: secondo host reale / beta host deploy.
+Merge PR M5B → main. Deploy Edge Function `agent-webhook` (aggiornata con `owner_id`).
 
-Obiettivo M5A-1:
-creare una configurazione reale per un beta host (non Lorenzo), verificare che il motore produca output corretti con quella config.
+Dopo il merge:
+1. deploy manuale `agent-webhook` su Supabase (unica Edge Function modificata in M5B)
+2. smoke test: Lorenzo login → vede tutti i suoi dati, B&B MARE login → vede 0 dati
+3. test creazione dato B&B MARE (es. appartamento cam1) → Lorenzo non lo vede
+4. valutare apertura M5C (Next.js) o altro step prodotto
 
-Possibili sotto-step M5A-1:
-1. definire dati minimi necessari per un beta host reale (identità, appartamenti, prezzi, regole)
-2. creare `src/config/hostConfig.betaHost.js` a partire da `testHostConfig.js` come template
-3. verificare messaggi/prezzi/regole/disponibilità con la config reale
-4. evitare multi-tenant strutturale finché non serve davvero
-5. documentare limiti e differenze rispetto al caso Lorenzo/Senigallia
-6. decidere solo dopo se aprire M5B
+Gap noti post-M5B da affrontare in M5C+:
+- `expense_categories` condivise tra tutti gli owner (catalogo globale — ok per MVP)
+- cleaner scoped a tutti gli appartamenti attivi, non solo quelli del suo owner (ok finché un solo cleaner)
+- per B&B MARE con webhook proprio: creare Edge Function separata con `EDGE_HOST_IDENTITY.ownerUUID` aggiornato
 
 ## 15. Rischi aperti
 
-- Costruire multi-tenant troppo presto.
-- Migrare a Next.js prima di validare il secondo host reale.
-- Confondere test host fittizio con beta host reale.
+- Migrare a Next.js prima di validare il secondo host reale end-to-end.
 - Usare memoria ChatGPT come fonte dati invece del repo/DB.
 - Accumulare modifiche Edge Functions senza deploy controllato.
 - Fare PR troppo grandi e difficili da validare.
+- `agent-webhook` aggiornata ma non ancora deployata: nuovi messaggi post-M5B ricevuti prima del deploy non avranno `owner_id` → non visibili a Lorenzo via RLS. Deploy urgente dopo merge M5B.
+- Gap cleaner multi-owner: il cleaner vede bookings di tutti gli appartamenti attivi (ora solo Lorenzo). Da affrontare se B&B MARE avrà un cleaner separato.
 
 ## 16. Prompt consigliato per nuove chat ChatGPT
 
