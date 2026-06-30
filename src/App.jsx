@@ -3,6 +3,7 @@ import { MONTHS, MONTHS_LONG } from "./constants";
 import { formatDate, nightCount } from "./utils/dateUtils";
 import LoadingScreen from "./components/LoadingScreen";
 import LoginScreen from "./components/LoginScreen";
+import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import CleanerView from "./components/CleanerView";
 import DayPopup from "./components/shared/DayPopup";
 import OperationsSection from "./components/owner/sections/OperationsSection";
@@ -414,6 +415,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
         {/* IMPOSTAZIONI */}
         {section==="settings"&&(
           <SettingsSection
+            user={user}
             realApts={realApts}
             bookings={bookings}
             onAddApartment={onAddApartment}
@@ -434,7 +436,7 @@ function OwnerView({user,bookings,expenses,onAddBooking,onUpdateBooking,onDelete
 // ────────────────────────────────────────────
 export default function App() {
   const {
-    user, loading, profileError, aptLoadError,
+    user, loading, profileError, aptLoadError, needsPasswordReset,
     bookings, expenses, apartments, categories,
     handleLogout,
     addBooking, updateBooking, deleteBooking,
@@ -445,6 +447,7 @@ export default function App() {
   const { inbox, decisions, aptRules, agentLoading, updateInboxStatus, markThreadReplied, markDecisionSent, approveDecision } = useAgentData(user);
 
   if (loading) return <LoadingScreen />;
+  if (needsPasswordReset) return <ResetPasswordScreen />;
   if (!user) return <LoginScreen profileError={profileError} />;
   if (aptLoadError) return (
     <div style={{minHeight:"100vh",background:"#0a0806",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem",fontFamily:"Georgia,serif",textAlign:"center"}}>

@@ -28,4 +28,7 @@ export const EDGE_HOST_IDENTITY = {
   area:         "Lungomare",
   region:       "Marche",
   locationLine: "Lungomare Senigallia, Spiaggia di Velluto",
+  // UUID del proprietario in auth.users — usato per owner_id in agent_inbox.
+  // Aggiornare qui se il webhook viene riconfigurato per un host diverso.
+  ownerUUID:    "adf5d712-f332-43bd-b3ee-8f93b920d860",
 } as const;

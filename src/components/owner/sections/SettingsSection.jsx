@@ -1,10 +1,35 @@
 import { useState } from "react";
+import { supabase } from "../../../supabaseClient";
 import { COLOR_PALETTE } from "../../../constants";
 import Modal from "../../shared/Modal";
 import Field, { iS, btnP } from "../../shared/Field";
 
-export default function SettingsSection({ realApts, bookings, onAddApartment, onUpdateApartment, onDeleteApartment, categories }) {
+export default function SettingsSection({ user, realApts, bookings, onAddApartment, onUpdateApartment, onDeleteApartment, categories }) {
   const [aptModal, setAptModal] = useState(null);
+  const [pwModal, setPwModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ newPw: "", confirm: "" });
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+
+  async function handleChangePw() {
+    if (!pwForm.newPw || !pwForm.confirm) { setPwError("Compila entrambi i campi"); return; }
+    if (pwForm.newPw.length < 8) { setPwError("La password deve essere di almeno 8 caratteri"); return; }
+    if (pwForm.newPw !== pwForm.confirm) { setPwError("Le password non coincidono"); return; }
+    setPwLoading(true);
+    setPwError("");
+    const { error } = await supabase.auth.updateUser({ password: pwForm.newPw });
+    setPwLoading(false);
+    if (error) {
+      setPwError("Errore: " + error.message);
+    } else {
+      setPwSuccess(true);
+      setTimeout(() => { setPwModal(false); setPwSuccess(false); setPwForm({ newPw: "", confirm: "" }); }, 1800);
+    }
+  }
+
+  function openPwModal() { setPwForm({ newPw: "", confirm: "" }); setPwError(""); setPwSuccess(false); setPwModal(true); }
   const [aptForm, setAptForm] = useState({ id: "", label: "", color: COLOR_PALETTE[0] });
 
   function openAddApt() { setAptForm({ id: `apt_${Date.now()}`, label: "", color: COLOR_PALETTE[0] }); setAptModal("add"); }
@@ -63,6 +88,16 @@ export default function SettingsSection({ realApts, bookings, onAddApartment, on
             <span style={{fontSize:"0.65rem",color:"#4a3a20"}}> · {categories.length} categorie</span>
           </div>
         </div>
+        <div style={{marginTop:"1rem",background:"#120f0a",border:"1px solid #2a2010",borderRadius:"12px",padding:"0.9rem"}}>
+          <h3 style={{margin:"0 0 0.8rem",fontFamily:"'Playfair Display',serif",color:"#e8d5b0",fontSize:"0.95rem"}}>🔐 Sicurezza</h3>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:"0.8rem",color:"#8a7a60"}}>Account</div>
+              <div style={{fontSize:"0.85rem",color:"#e8d5b0",marginTop:"0.1rem"}}>{user?.email}</div>
+            </div>
+            <button onClick={openPwModal} style={btnP}>Cambia password</button>
+          </div>
+        </div>
       </div>
 
       {aptModal&&(
@@ -79,6 +114,34 @@ export default function SettingsSection({ realApts, bookings, onAddApartment, on
             <button onClick={()=>setAptModal(null)} style={{...btnP,flex:1,background:"#2a2010",color:"#8a7a60"}}>Annulla</button>
             <button onClick={saveApt} style={{...btnP,flex:1}}>Salva</button>
           </div>
+        </Modal>
+      )}
+
+      {pwModal&&(
+        <Modal title="Cambia password" onClose={()=>setPwModal(false)}>
+          {pwSuccess ? (
+            <div style={{textAlign:"center",padding:"0.5rem 0"}}>
+              <div style={{fontSize:"1.8rem",marginBottom:"0.5rem"}}>✅</div>
+              <div style={{color:"#6ec99a",fontFamily:"'Playfair Display',serif",fontSize:"0.95rem"}}>Password aggiornata</div>
+            </div>
+          ) : (
+            <>
+              <Field label="Nuova password">
+                <div style={{position:"relative"}}>
+                  <input type={showPw?"text":"password"} value={pwForm.newPw} onChange={e=>{ setPwForm(f=>({...f,newPw:e.target.value})); setPwError(""); }} style={{...iS,padding:"0.75rem 2.8rem 0.75rem 1rem"}}/>
+                  <button onClick={()=>setShowPw(s=>!s)} style={{position:"absolute",right:"0.8rem",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#6a5a40",cursor:"pointer",fontSize:"1rem",lineHeight:1}}>{showPw?"🙈":"👁"}</button>
+                </div>
+              </Field>
+              <Field label="Conferma password">
+                <input type={showPw?"text":"password"} value={pwForm.confirm} onChange={e=>{ setPwForm(f=>({...f,confirm:e.target.value})); setPwError(""); }} style={iS}/>
+              </Field>
+              {pwError&&<div style={{background:"rgba(201,110,110,0.12)",border:"1px solid #c96e6e44",borderRadius:"8px",padding:"0.55rem 0.8rem",color:"#c96e6e",fontSize:"0.78rem",textAlign:"center",marginBottom:"0.5rem"}}>{pwError}</div>}
+              <div style={{display:"flex",gap:"0.65rem",marginTop:"0.5rem"}}>
+                <button onClick={()=>setPwModal(false)} style={{...btnP,flex:1,background:"#2a2010",color:"#8a7a60"}}>Annulla</button>
+                <button onClick={handleChangePw} disabled={pwLoading} style={{...btnP,flex:1,opacity:pwLoading?0.7:1,cursor:pwLoading?"not-allowed":"pointer"}}>{pwLoading?"Salvataggio…":"Salva"}</button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
     </>

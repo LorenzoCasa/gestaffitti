@@ -19,6 +19,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EDGE_HOST_IDENTITY } from "../_shared/hostConfig.ts";
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,9 @@ serve(async (req: Request) => {
     return json({ result: "duplicate", id: existing.id }, 200);
   }
 
-  // 8. INSERT
+  // 8. INSERT — owner_id identifica il proprietario del webhook (M5B multi-tenant).
+  // Per aggiungere un secondo host: creare una Edge Function webhook separata
+  // con il proprio EDGE_HOST_IDENTITY.ownerUUID in _shared/hostConfig.ts.
   const { data: inserted, error: insertError } = await supabase
     .from("agent_inbox")
     .insert({
@@ -207,6 +210,7 @@ serve(async (req: Request) => {
       raw_metadata:          enrichedMetadata,
       status:                "new",
       owner_action_required: true,
+      owner_id:              EDGE_HOST_IDENTITY.ownerUUID,
     })
     .select("id")
     .single();
