@@ -227,7 +227,7 @@ Milestone M5:
 
 - M5A-0 — ✅ completato e deployato (PR #35)
 - M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — PR #37 aperta
-- M5B — ✅ mergeata su main (PR #38, commit `0111b38`) — ⚠️ deploy agent-webhook pendente / smoke test app pendenti
+- M5B — ✅ mergeata su main (PR #38, commit `0111b38`) — ✅ agent-webhook deployata (2026-06-30) — ⚠️ smoke test app pendenti
 - M5C — bloccata — aspetta decisione esplicita Next.js
 
 Ultima cosa fatta (M5B merge — 2026-06-30):
@@ -237,9 +237,9 @@ Ultima cosa fatta (M5B merge — 2026-06-30):
 - smoke test DB (service_role, verifica catena RLS):
   - Lorenzo: 10 booking ✅ / 13 spese ✅ / 2 apt attivi ✅ / 55 inbox con owner_id ✅
   - B&B MARE: 0 booking ✅ / 0 spese ✅ / 0 apt ✅ / 0 inbox ✅
-- deploy `agent-webhook` ⚠️ NON ancora eseguito — vedere sezione 14 (urgente)
-- smoke test app (login Lorenzo / B&B MARE) ⚠️ NON ancora eseguiti — dopo deploy
-- test auth (reset password / cambio password) ⚠️ NON ancora eseguiti
+- deploy `agent-webhook` ✅ eseguito (2026-06-30) — warning Docker non bloccante, deploy confermato
+- smoke test app (login Lorenzo / B&B MARE) ⚠️ NON ancora eseguiti — da fare
+- test auth (reset password / cambio password) ⚠️ NON ancora eseguiti — da fare
 - build verde (npm run build ✅) · test 74/74 ✅
 
 ## 12. Decisione consigliata M5
@@ -271,16 +271,9 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 
 ## 14. Prossimo passo operativo
 
-⚠️ Deploy urgente: `agent-webhook` deve essere deployata prima possibile.
-Nuovi messaggi Subito arrivati dopo il merge M5B ma prima del deploy non avranno `owner_id`
-→ non saranno visibili a Lorenzo via RLS.
+✅ `agent-webhook` deployata il 2026-06-30 (warning Docker non bloccante — deploy confermato).
 
-Comando deploy (da eseguire manualmente in terminale):
-```
-supabase functions deploy agent-webhook --project-ref rkhxbjrfjwavwhehtavg
-```
-
-Poi:
+Smoke test app da fare:
 1. smoke test login Lorenzo sull'app: vede 10 booking / 13 spese / 2 apt / 55 inbox
 2. smoke test login B&B MARE sull'app: schermata "Nessun appartamento configurato"
 3. test reset password via email (tasto "Password dimenticata?" in login screen)
