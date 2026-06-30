@@ -96,7 +96,7 @@ export default function useSupabaseData() {
 
   // ── Apartments ──────────────────────────────
   const addApartment = async (apt) => {
-    const { data, error } = await supabase.from("apartments").insert({ id: apt.id, label: apt.label, color: apt.color, active: true }).select().single();
+    const { data, error } = await supabase.from("apartments").insert({ id: apt.id, label: apt.label, color: apt.color, active: true, owner_id: user?.id }).select().single();
     if (error) { alert("Errore salvataggio appartamento: " + error.message); return; }
     if (data) setApartments(prev => [...prev, data]);
   };

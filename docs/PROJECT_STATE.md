@@ -221,16 +221,16 @@ PR/stati rilevanti noti:
 
 ## 11. Stato attuale
 
-M5B completato su branch `feat/m5b-multi-tenant-isolation`, in attesa di PR/merge.
+M5B audit completato su branch `feat/m5b-multi-tenant-isolation`, PR #38 aperta — in attesa di merge.
 
 Milestone M5:
 
 - M5A-0 — ✅ completato e deployato (PR #35)
-- M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — in attesa di PR/merge
-- M5B — ✅ implementata su branch `feat/m5b-multi-tenant-isolation` — in attesa di PR/merge
+- M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — PR #37 aperta
+- M5B — ✅ implementata e auditata (PR #38) — in attesa di merge
 - M5C — bloccata — aspetta decisione esplicita Next.js
 
-Ultima cosa fatta (M5B — 2026-06-30):
+Ultima cosa fatta (M5B audit — 2026-06-30):
 - branch `feat/m5b-multi-tenant-isolation` da main
 - migration `supabase/migrations/m5b_multi_tenant_isolation.sql` applicata al DB linked
 - `apartments.owner_id` popolato: apt1/apt2/property → Lorenzo (`adf5d712`)
@@ -238,10 +238,11 @@ Ultima cosa fatta (M5B — 2026-06-30):
 - RLS sostituite: zero policy `allow all` su dati operativi
 - policy aggiunte: owner per-tenant su bookings/expenses/apartments/inbox/decisions/apt_rules; cleaner full su bookings
 - Edge Function `agent-webhook/index.ts`: `owner_id` aggiunto al INSERT
-- `_shared/hostConfig.ts`: aggiunto `ownerUUID` a `EDGE_HOST_IDENTITY`
+- `_shared/hostConfig.ts`: aggiunto `ownerUUID` a `EDGE_HOST_IDENTITY` (`adf5d712`)
 - riga virtuale `property` inserita in `apartments` (active=false) per coprire le 9 spese comuni di Lorenzo
 - isolamento verificato: Lorenzo vede 10 booking / 13 spese / 2 apt attivi / 55 inbox; B&B MARE vede 0
-- build verde · nessun deploy · nessuna cancellazione dati · nessun dato Lorenzo perso
+- Auth v1 inclusa: reset password via email, cambio password da Impostazioni, ResetPasswordScreen
+- build verde (npm run build ✅) · test 74/74 ✅ · PR description corretta · nessun deploy
 
 ## 12. Decisione consigliata M5
 
@@ -272,13 +273,14 @@ M5C, cioè piano Next.js, è importante ma non deve precedere automaticamente la
 
 ## 14. Prossimo passo operativo
 
-Merge PR M5B → main. Deploy Edge Function `agent-webhook` (aggiornata con `owner_id`).
+Merge PR #38 (M5B) → main. Deploy Edge Function `agent-webhook` (aggiornata con `owner_id`).
 
 Dopo il merge:
 1. deploy manuale `agent-webhook` su Supabase (unica Edge Function modificata in M5B)
 2. smoke test: Lorenzo login → vede tutti i suoi dati, B&B MARE login → vede 0 dati
-3. test creazione dato B&B MARE (es. appartamento cam1) → Lorenzo non lo vede
-4. valutare apertura M5C (Next.js) o altro step prodotto
+3. test reset password via email e cambio password da Impostazioni
+4. test creazione dato B&B MARE (es. appartamento cam1) → Lorenzo non lo vede
+5. valutare apertura M5C (Next.js) o altro step prodotto
 
 Gap noti post-M5B da affrontare in M5C+:
 - `expense_categories` condivise tra tutti gli owner (catalogo globale — ok per MVP)
