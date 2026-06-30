@@ -221,24 +221,25 @@ PR/stati rilevanti noti:
 
 ## 11. Stato attuale
 
-M5B completata — PR #38 mergeata su main (2026-06-30). Deploy agent-webhook e smoke test completati.
+M5B pronta al merge — PR #38 aperta, DB già migrato e verificato, deploy agent-webhook pendente.
 
 Milestone M5:
 
 - M5A-0 — ✅ completato e deployato (PR #35)
 - M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — PR #37 aperta
-- M5B — ✅ completata (PR #38, mergeata) — deploy agent-webhook ⚠️ richiesto manualmente
+- M5B — ✅ codice + audit completi (PR #38) — in attesa di merge → deploy → smoke test app
 - M5C — bloccata — aspetta decisione esplicita Next.js
 
-Ultima cosa fatta (M5B post-merge — 2026-06-30):
-- PR #38 mergeata su main
-- migration applicata: apt1/apt2/property → owner_id Lorenzo; 55 inbox backfillati
+Ultima cosa fatta (M5B pre-merge audit — 2026-06-30):
+- PR #38 aperta su branch `feat/m5b-multi-tenant-isolation` — NON ancora mergeata
+- migration applicata al DB linked: apt1/apt2/property → owner_id Lorenzo; 55 inbox backfillati
 - RLS verificate via CLI: 10 policy attive, zero `allow all` su tabelle operative
 - smoke test DB (service_role, verifica catena RLS):
   - Lorenzo: 10 booking ✅ / 13 spese ✅ / 2 apt attivi ✅ / 55 inbox con owner_id ✅
   - B&B MARE: 0 booking ✅ / 0 spese ✅ / 0 apt ✅ / 0 inbox ✅
 - deploy `agent-webhook` ⚠️ NON ancora eseguito — vedere sezione 14
-- test auth (reset password / cambio password): da eseguire manualmente sull'app
+- smoke test app (login Lorenzo / B&B MARE) ⚠️ NON ancora eseguiti — dopo deploy
+- test auth (reset password / cambio password) ⚠️ NON ancora eseguiti — dopo merge
 - build verde (npm run build ✅) · test 74/74 ✅
 
 ## 12. Decisione consigliata M5
