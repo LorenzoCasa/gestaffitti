@@ -221,25 +221,25 @@ PR/stati rilevanti noti:
 
 ## 11. Stato attuale
 
-M5B pronta al merge — PR #38 aperta, DB già migrato e verificato, deploy agent-webhook pendente.
+M5B mergeata su main (2026-06-30, commit merge `0111b38`). Deploy agent-webhook pendente — M5B non ancora definitivamente chiusa.
 
 Milestone M5:
 
 - M5A-0 — ✅ completato e deployato (PR #35)
 - M5A-1 — ✅ implementata su branch `feat/m5a-1-beta-host-config`, commit `77be101` — PR #37 aperta
-- M5B — ✅ codice + audit completi (PR #38) — in attesa di merge → deploy → smoke test app
+- M5B — ✅ mergeata su main (PR #38, commit `0111b38`) — ⚠️ deploy agent-webhook pendente / smoke test app pendenti
 - M5C — bloccata — aspetta decisione esplicita Next.js
 
-Ultima cosa fatta (M5B pre-merge audit — 2026-06-30):
-- PR #38 aperta su branch `feat/m5b-multi-tenant-isolation` — NON ancora mergeata
-- migration applicata al DB linked: apt1/apt2/property → owner_id Lorenzo; 55 inbox backfillati
+Ultima cosa fatta (M5B merge — 2026-06-30):
+- PR #38 mergeata su main — commit merge `0111b38`, 4 commit nel branch, 9 file modificati
+- migration applicata al DB linked (pre-merge): apt1/apt2/property → owner_id Lorenzo; 55 inbox backfillati
 - RLS verificate via CLI: 10 policy attive, zero `allow all` su tabelle operative
 - smoke test DB (service_role, verifica catena RLS):
   - Lorenzo: 10 booking ✅ / 13 spese ✅ / 2 apt attivi ✅ / 55 inbox con owner_id ✅
   - B&B MARE: 0 booking ✅ / 0 spese ✅ / 0 apt ✅ / 0 inbox ✅
-- deploy `agent-webhook` ⚠️ NON ancora eseguito — vedere sezione 14
+- deploy `agent-webhook` ⚠️ NON ancora eseguito — vedere sezione 14 (urgente)
 - smoke test app (login Lorenzo / B&B MARE) ⚠️ NON ancora eseguiti — dopo deploy
-- test auth (reset password / cambio password) ⚠️ NON ancora eseguiti — dopo merge
+- test auth (reset password / cambio password) ⚠️ NON ancora eseguiti
 - build verde (npm run build ✅) · test 74/74 ✅
 
 ## 12. Decisione consigliata M5
